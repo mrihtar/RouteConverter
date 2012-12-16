@@ -29,13 +29,14 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
 import java.util.logging.Filter;
 import java.util.logging.Handler;
-import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
 import static java.util.logging.Level.ALL;
+import static java.util.logging.Level.INFO;
+import static java.util.logging.Level.SEVERE;
 
 /**
  * Allows to control log output
@@ -72,7 +73,8 @@ public class LoggingHelper {
             System.err.println("Cannot configure file logging");
             e.printStackTrace();
         }
-        logger.setLevel(ALL);
+        // using ALL brings up a colored JavaFX WebView
+        // logger.setLevel(ALL);
         redirectStdOutAndErrToLog();
     }
 
@@ -87,13 +89,13 @@ public class LoggingHelper {
         handler.setFormatter(new SimpleFormatter());
         Logger logger = Logger.getLogger("");
         logger.addHandler(handler);
-        logger.setLevel(ALL);
+        // using ALL brings up a colored JavaFX WebView
+        // logger.setLevel(ALL);
     }
 
     public void logAsDefault() {
         LogManager.getLogManager().reset();
     }
-
 
     public String getLogFileAsString() {
         logAsDefault();
@@ -140,14 +142,13 @@ public class LoggingHelper {
         return buffer.toString();
     }
 
-
     private void redirectStdOutAndErrToLog() {
         Logger logger = Logger.getLogger("stdout");
-        LoggingOutputStream los = new LoggingOutputStream(logger, Level.INFO);
+        LoggingOutputStream los = new LoggingOutputStream(logger, INFO);
         System.setOut(new PrintStream(los, true));
 
         logger = Logger.getLogger("stderr");
-        los = new LoggingOutputStream(logger, Level.SEVERE);
+        los = new LoggingOutputStream(logger, SEVERE);
         System.setErr(new PrintStream(los, true));
     }
 
