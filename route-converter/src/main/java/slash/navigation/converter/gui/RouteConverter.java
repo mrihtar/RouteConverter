@@ -179,6 +179,10 @@ public class RouteConverter extends SingleFrameApplication {
         return getInstance().getContext().getBundle();
     }
 
+    public static Preferences getPreferences() {
+        return preferences;
+    }
+
     public static String getTitle() {
         Version version = parseVersionFromManifest();
         return MessageFormat.format(getBundle().getString("title"), version.getVersion(), version.getDate());
