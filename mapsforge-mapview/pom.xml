@@ -9,6 +9,9 @@
         <version>2.10-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
+    <properties>
+        <mapsforge.version>0.4.0-SNAPSHOT</mapsforge.version>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -25,6 +28,17 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>navigation-formats</artifactId>
             <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mapsforge</groupId>
+            <artifactId>mapsforge-map</artifactId>
+            <version>${mapsforge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mapsforge</groupId>
+            <artifactId>mapsforge-map-awt</artifactId>
+            <version>${mapsforge.version}</version>
         </dependency>
     </dependencies>
 </project>

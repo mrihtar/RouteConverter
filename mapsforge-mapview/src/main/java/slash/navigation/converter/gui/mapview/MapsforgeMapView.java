@@ -20,6 +20,18 @@
 
 package slash.navigation.converter.gui.mapview;
 
+import org.mapsforge.core.graphics.GraphicFactory;
+import org.mapsforge.core.model.LatLong;
+import org.mapsforge.map.awt.AwtGraphicFactory;
+import org.mapsforge.map.layer.Layer;
+import org.mapsforge.map.layer.Layers;
+import org.mapsforge.map.layer.cache.FileSystemTileCache;
+import org.mapsforge.map.layer.cache.InMemoryTileCache;
+import org.mapsforge.map.layer.cache.TileCache;
+import org.mapsforge.map.layer.cache.TwoLevelTileCache;
+import org.mapsforge.map.layer.renderer.TileRendererLayer;
+import org.mapsforge.map.model.MapViewPosition;
+import org.mapsforge.map.rendertheme.InternalRenderTheme;
 import slash.navigation.base.NavigationPosition;
 import slash.navigation.converter.gui.augment.PositionAugmenter;
 import slash.navigation.converter.gui.models.CharacteristicsModel;
@@ -28,6 +40,9 @@ import slash.navigation.converter.gui.models.PositionsSelectionModel;
 import slash.navigation.converter.gui.models.UnitSystemModel;
 
 import java.awt.*;
+import java.io.File;
+
+import static org.mapsforge.map.rendertheme.InternalRenderTheme.OSMARENDER;
 
 /**
  * Implementation for a component that displays the positions of a position list on a map
@@ -37,87 +52,134 @@ import java.awt.*;
  */
 
 public class MapsforgeMapView implements MapView {
+    private static final GraphicFactory GRAPHIC_FACTORY = AwtGraphicFactory.INSTANCE; // TODO also defined in AwtGraphicMapView
+
+    private AwtGraphicMapView mapView;
+
+    public MapsforgeMapView() {
+        mapView = createMapView();
+        addLayers(mapView);
+        mapView.getModel().mapViewPosition.setZoomLevel((byte) 8);
+        mapView.getModel().mapViewPosition.setCenter(new LatLong(53.5, 10.0));
+    }
+
+    private AwtGraphicMapView createMapView() {
+        AwtGraphicMapView mapView = new AwtGraphicMapView();
+        mapView.addComponentListener(new MapViewComponentListener(mapView, mapView.getModel().mapViewModel));
+
+        MapViewMouseEventListener mapViewMouseEventListener = new MapViewMouseEventListener(mapView.getModel().mapViewPosition);
+        mapView.addMouseListener(mapViewMouseEventListener);
+        mapView.addMouseMotionListener(mapViewMouseEventListener);
+        mapView.addMouseWheelListener(mapViewMouseEventListener);
+
+        return mapView;
+    }
+
+    private void addLayers(AwtGraphicMapView mapView) {
+        Layers layers = mapView.getLayerManager().getLayers();
+        TileCache tileCache = createTileCache();
+
+        // layers.add(createTileDownloadLayer(tileCache, mapView.getModel().mapViewPosition));
+        layers.add(createTileRendererLayer(tileCache, mapView.getModel().mapViewPosition));
+        // layers.add(new TileGridLayer(GRAPHIC_FACTORY));
+        // layers.add(new TileCoordinatesLayer(GRAPHIC_FACTORY));
+    }
+
+    private static Layer createTileRendererLayer(TileCache tileCache, MapViewPosition mapViewPosition) {
+        TileRendererLayer tileRendererLayer = new TileRendererLayer(tileCache, mapViewPosition, GRAPHIC_FACTORY);
+        tileRendererLayer.setMapFile(new File("C:/development/mapsforge-maps/germany.map"));
+        tileRendererLayer.setXmlRenderTheme(OSMARENDER);
+        return tileRendererLayer;
+    }
+
+    private static TileCache createTileCache() {
+        TileCache firstLevelTileCache = new InMemoryTileCache(64);
+        File cacheDirectory = new File(System.getProperty("java.io.tmpdir"), "mapsforge");
+        TileCache secondLevelTileCache = new FileSystemTileCache(1024, cacheDirectory, GRAPHIC_FACTORY);
+        return new TwoLevelTileCache(firstLevelTileCache, secondLevelTileCache);
+    }
+
     public void initialize(PositionsModel positionsModel, PositionsSelectionModel positionsSelectionModel, CharacteristicsModel characteristicsModel, PositionAugmenter positionAugmenter, boolean recenterAfterZooming, boolean showCoordinates, boolean showWaypointDescription, TravelMode travelMode, boolean avoidHighways, boolean avoidTolls, UnitSystemModel unitSystemModel) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public boolean isSupportedPlatform() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
+        return true;
     }
 
     public boolean isInitialized() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
+        return false;  // TODO implement me
     }
 
     public Throwable getInitializationCause() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return null;  // TODO implement me
     }
 
     public void dispose() {
-        //To change body of implemented methods use File | Settings | File Templates.
+        mapView.destroy();
     }
 
     public Component getComponent() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return mapView;
     }
 
     public void resize() {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setRecenterAfterZooming(boolean recenterAfterZooming) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setShowCoordinates(boolean showCoordinates) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setShowWaypointDescription(boolean showWaypointDescription) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setTravelMode(TravelMode travelMode) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setAvoidHighways(boolean avoidHighways) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setAvoidTolls(boolean avoidTolls) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public NavigationPosition getCenter() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return null;  // TODO implement me
     }
 
     public void setCenter(NavigationPosition center) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void print(String title, boolean withDirections) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void addMapViewListener(MapViewListener listener) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void removeMapViewListener(MapViewListener listener) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void insertAllWaypoints(int[] startPositions) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void insertOnlyTurnpoints(int[] startPositions) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 
     public void setSelectedPositions(int[] selectedPositions, boolean replaceSelection) {
-        //To change body of implemented methods use File | Settings | File Templates.
+        // TODO implement me
     }
 }
