@@ -232,6 +232,7 @@
         <module>hgt</module>
         <module>jaxb6</module>
         <module>kml</module>
+        <module>mapsforge-mapview</module>
         <module>mapview</module>
         <module>navigation-formats</module>
         <module>position-completer</module>
