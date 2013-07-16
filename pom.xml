@@ -51,7 +51,7 @@
     </scm>
 
     <properties>
-        <targetJdk>1.6</targetJdk>
+        <targetJdk>1.7</targetJdk>
     </properties>
 
     <build>
