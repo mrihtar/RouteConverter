@@ -34,7 +34,7 @@ import org.mapsforge.map.view.FrameBuffer;
 import java.awt.*;
 
 public class AwtGraphicMapView extends Container implements org.mapsforge.map.view.MapView {
-    private static final GraphicFactory GRAPHIC_FACTORY = AwtGraphicFactory.INSTANCE;
+    static final GraphicFactory GRAPHIC_FACTORY = AwtGraphicFactory.INSTANCE;
 
     private final FrameBuffer frameBuffer;
     private final LayerManager layerManager;
