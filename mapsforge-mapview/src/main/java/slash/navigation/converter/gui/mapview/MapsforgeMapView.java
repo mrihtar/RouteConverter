@@ -20,11 +20,13 @@
 
 package slash.navigation.converter.gui.mapview;
 
+import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.map.layer.Layer;
 import org.mapsforge.map.layer.Layers;
 import org.mapsforge.map.layer.cache.InMemoryTileCache;
 import org.mapsforge.map.layer.cache.TileCache;
+import org.mapsforge.map.layer.overlay.Marker;
 import org.mapsforge.map.layer.renderer.TileRendererLayer;
 import org.mapsforge.map.model.MapViewPosition;
 import slash.navigation.base.NavigationPosition;
@@ -35,9 +37,15 @@ import slash.navigation.converter.gui.models.PositionsModel;
 import slash.navigation.converter.gui.models.PositionsSelectionModel;
 import slash.navigation.converter.gui.models.UnitSystemModel;
 
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
 import java.awt.*;
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 
 import static org.mapsforge.map.rendertheme.InternalRenderTheme.OSMARENDER;
@@ -52,6 +60,8 @@ import static slash.navigation.converter.gui.mapview.AwtGraphicMapView.GRAPHIC_F
 
 public class MapsforgeMapView implements MapView {
     private static final Preferences preferences = Preferences.userNodeForPackage(MapsforgeMapView.class);
+    private static final Logger log = Logger.getLogger(MapsforgeMapView.class.getName());
+
     private static final String MAPSFORGE_CACHE_DIRECTORY_PREFERENCE = "mapsforgeCacheDirectory";
     private static final String CENTER_LATITUDE_PREFERENCE = "centerLatitude";
     private static final String CENTER_LONGITUDE_PREFERENCE = "centerLongitude";
@@ -63,6 +73,7 @@ public class MapsforgeMapView implements MapView {
     private UnitSystemModel unitSystemModel;
 
     private AwtGraphicMapView mapView;
+    private static Bitmap markerIcon;
 
     private boolean recenterAfterZooming, showCoordinates, showWaypointDescription, avoidHighways, avoidTolls;
     private TravelMode travelMode;
@@ -93,11 +104,18 @@ public class MapsforgeMapView implements MapView {
         mapView = createMapView();
         addLayers(mapView);
 
+        // TODO MapViewPosition#setMapPosition does this in one call
         double latitude = preferences.getDouble(CENTER_LATITUDE_PREFERENCE, 35.0);
         double longitude = preferences.getDouble(CENTER_LONGITUDE_PREFERENCE, -25.0);
         setCenter(new Wgs84Position(longitude, latitude, null, null, null, null));
         int zoom = preferences.getInt(CENTER_ZOOM_PREFERENCE, 8);
         setZoom(zoom);
+
+        try {
+            markerIcon = GRAPHIC_FACTORY.createBitmap(MapsforgeMapView.class.getResourceAsStream("marker.png"));
+        } catch (IOException e) {
+            log.severe("Cannot create marker icon: " + e.getMessage());
+        }
     }
 
     private AwtGraphicMapView createMapView() {
@@ -156,6 +174,12 @@ public class MapsforgeMapView implements MapView {
         this.positionsSelectionModel = positionsSelectionModel;
         this.characteristicsModel = characteristicsModel;
         this.unitSystemModel = unitSystemModel;
+
+        positionsModel.addTableModelListener(new TableModelListener() {
+            public void tableChanged(TableModelEvent e) {
+                addLinesToMap(MapsforgeMapView.this.positionsModel.getRoute().getPositions());
+            }
+        });
     }
 
     public boolean isSupportedPlatform() {
@@ -185,41 +209,39 @@ public class MapsforgeMapView implements MapView {
     }
 
     public void resize() {
-        // TODO implement me
+        // intentionally left empty
     }
 
     public void setRecenterAfterZooming(boolean recenterAfterZooming) {
         this.recenterAfterZooming = recenterAfterZooming;
-        // TODO implement me
     }
 
     public void setShowCoordinates(boolean showCoordinates) {
         this.showCoordinates = showCoordinates;
-        // TODO implement me
     }
 
     public void setShowWaypointDescription(boolean showWaypointDescription) {
         this.showWaypointDescription = showWaypointDescription;
-        // TODO implement me
     }
 
     public void setTravelMode(TravelMode travelMode) {
         this.travelMode = travelMode;
-        // TODO implement me
     }
 
     public void setAvoidHighways(boolean avoidHighways) {
         this.avoidHighways = avoidHighways;
-        // TODO implement me
     }
 
     public void setAvoidTolls(boolean avoidTolls) {
         this.avoidTolls = avoidTolls;
-        // TODO implement me
     }
 
     private NavigationPosition asPosition(LatLong latLong) {
         return new Wgs84Position(latLong.longitude, latLong.latitude, null, null, null, null);
+    }
+
+    private LatLong asLatLong(NavigationPosition position) {
+        return new LatLong(position.getLatitude(), position.getLongitude());
     }
 
     public NavigationPosition getCenter() {
@@ -250,8 +272,23 @@ public class MapsforgeMapView implements MapView {
         // TODO implement me
     }
 
+    private void addLinesToMap(List<NavigationPosition> positions) {
+        // TODO this just adds lines, find elegant way to update/remove existing lines
+        List<LatLong> latLongs = new ArrayList<>(positions.size());
+        for (NavigationPosition position : positions) {
+            latLongs.add(asLatLong(position));
+        }
+        mapView.getLayerManager().getLayers().add(new Polylines(latLongs));
+    }
+
     public void setSelectedPositions(int[] selectedPositions, boolean replaceSelection) {
-        // TODO implement me
+        // TODO this just adds markers, find elegant way to update/remove existing markers
+        for (int selectedPosition : selectedPositions) {
+            NavigationPosition position = positionsModel.getPosition(selectedPosition);
+            Marker marker = new Marker(asLatLong(position), markerIcon, 0, 0);
+            mapView.getLayerManager().getLayers().add(marker);
+            setCenter(position);
+        }
     }
 
     // listeners
