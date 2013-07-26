@@ -22,6 +22,7 @@ package slash.navigation.converter.gui.mapview;
 
 import org.mapsforge.core.graphics.Bitmap;
 import org.mapsforge.core.model.LatLong;
+import org.mapsforge.core.model.MapPosition;
 import org.mapsforge.map.layer.Layer;
 import org.mapsforge.map.layer.Layers;
 import org.mapsforge.map.layer.cache.InMemoryTileCache;
@@ -104,12 +105,10 @@ public class MapsforgeMapView implements MapView {
         mapView = createMapView();
         addLayers(mapView);
 
-        // TODO MapViewPosition#setMapPosition does this in one call
-        double latitude = preferences.getDouble(CENTER_LATITUDE_PREFERENCE, 35.0);
         double longitude = preferences.getDouble(CENTER_LONGITUDE_PREFERENCE, -25.0);
-        setCenter(new Wgs84Position(longitude, latitude, null, null, null, null));
-        int zoom = preferences.getInt(CENTER_ZOOM_PREFERENCE, 8);
-        setZoom(zoom);
+        double latitude = preferences.getDouble(CENTER_LATITUDE_PREFERENCE, 35.0);
+        byte zoom = (byte) preferences.getInt(CENTER_ZOOM_PREFERENCE, 8);
+        mapView.getModel().mapViewPosition.setMapPosition(new MapPosition(new LatLong(latitude, longitude), zoom));
 
         try {
             markerIcon = GRAPHIC_FACTORY.createBitmap(MapsforgeMapView.class.getResourceAsStream("marker.png"));
@@ -196,8 +195,8 @@ public class MapsforgeMapView implements MapView {
 
     public void dispose() {
         NavigationPosition center = getCenter();
-        preferences.putDouble(CENTER_LATITUDE_PREFERENCE, center.getLatitude());
         preferences.putDouble(CENTER_LONGITUDE_PREFERENCE, center.getLongitude());
+        preferences.putDouble(CENTER_LATITUDE_PREFERENCE, center.getLatitude());
         int zoom = getZoom();
         preferences.putInt(CENTER_ZOOM_PREFERENCE, zoom);
 
