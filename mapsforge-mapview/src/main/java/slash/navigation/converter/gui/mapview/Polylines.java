@@ -50,7 +50,7 @@ public class Polylines extends Layer {
         this.latLongs = latLongs;
     }
 
-    public synchronized void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint) {
+    public void draw(BoundingBox boundingBox, byte zoomLevel, Canvas canvas, Point topLeftPoint) {
         for (int i = 0; i < latLongs.size() - 1; i++) {
             LatLong from = latLongs.get(i);
             int fromX = (int) (longitudeToPixelX(from.longitude, zoomLevel) - topLeftPoint.x);

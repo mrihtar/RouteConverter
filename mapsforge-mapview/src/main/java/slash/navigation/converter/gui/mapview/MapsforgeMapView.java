@@ -236,6 +236,7 @@ public class MapsforgeMapView implements MapView {
         this.avoidTolls = avoidTolls;
     }
 
+
     private NavigationPosition asPosition(LatLong latLong) {
         return new Wgs84Position(latLong.longitude, latLong.latitude, null, null, null, null);
     }
@@ -244,12 +245,13 @@ public class MapsforgeMapView implements MapView {
         return new LatLong(position.getLatitude(), position.getLongitude());
     }
 
+
     public NavigationPosition getCenter() {
         return asPosition(mapView.getModel().mapViewPosition.getCenter());
     }
 
     public void setCenter(NavigationPosition center) {
-        mapView.getModel().mapViewPosition.setCenter(new LatLong(center.getLatitude(), center.getLongitude()));
+        mapView.getModel().mapViewPosition.setCenter(asLatLong(center));
     }
 
     private int getZoom() {
