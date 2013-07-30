@@ -17,7 +17,6 @@
 
     Copyright (C) 2007 Christian Pesch. All Rights Reserved.
 */
-
 package slash.navigation.converter.gui.mapview;
 
 import org.mapsforge.core.graphics.Bitmap;
@@ -31,7 +30,6 @@ import org.mapsforge.map.layer.overlay.Marker;
 import org.mapsforge.map.layer.renderer.TileRendererLayer;
 import org.mapsforge.map.model.MapViewPosition;
 import slash.navigation.base.NavigationPosition;
-import slash.navigation.base.Wgs84Position;
 import slash.navigation.converter.gui.augment.PositionAugmenter;
 import slash.navigation.converter.gui.models.CharacteristicsModel;
 import slash.navigation.converter.gui.models.PositionsModel;
@@ -44,12 +42,15 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 
 import static org.mapsforge.map.rendertheme.InternalRenderTheme.OSMARENDER;
+import static slash.navigation.base.Positions.asPosition;
 import static slash.navigation.converter.gui.mapview.AwtGraphicMapView.GRAPHIC_FACTORY;
 
 /**
@@ -79,6 +80,7 @@ public class MapsforgeMapView implements MapView {
     private boolean recenterAfterZooming, showCoordinates, showWaypointDescription, avoidHighways, avoidTolls;
     private TravelMode travelMode;
     private PositionAugmenter positionAugmenter;
+    private SelectionUpdater selectionUpdater;
 
     // initialization
 
@@ -143,8 +145,9 @@ public class MapsforgeMapView implements MapView {
         String directoryName = preferences.get(MAPSFORGE_CACHE_DIRECTORY_PREFERENCE, new File(System.getProperty("user.home"), ".mapsforge").getAbsolutePath());
         File directory = new File(directoryName);
         if (!directory.exists()) {
-            if (!directory.mkdirs())
+            if (!directory.mkdirs()) {
                 throw new IllegalArgumentException("Cannot create mapsforge cache directory " + directory);
+            }
         }
         return directory;
     }
@@ -177,6 +180,30 @@ public class MapsforgeMapView implements MapView {
         positionsModel.addTableModelListener(new TableModelListener() {
             public void tableChanged(TableModelEvent e) {
                 addLinesToMap(MapsforgeMapView.this.positionsModel.getRoute().getPositions());
+            }
+        });
+
+        this.selectionUpdater = new SelectionUpdater(positionsModel, new SelectionOperation() {
+            private Map<NavigationPosition, Marker> positionsToMarkers = new HashMap<NavigationPosition, Marker>();
+
+            public void add(List<NavigationPosition> positions) {
+                for(NavigationPosition position : positions) {
+                    Marker marker = new Marker(asLatLong(position), markerIcon, 8, -16);
+                    mapView.getLayerManager().getLayers().add(marker);
+                    positionsToMarkers.put(position, marker);
+                }
+                if (positions.size() > 0)
+                    setCenter(positions.get(positions.size() - 1));
+            }
+
+            public void remove(List<NavigationPosition> positions) {
+                for (NavigationPosition position : positions) {
+                    Marker marker = positionsToMarkers.get(position);
+                    if (marker != null) {
+                        mapView.getLayerManager().getLayers().remove(marker);
+                        positionsToMarkers.remove(position);
+                    }
+                }
             }
         });
     }
@@ -236,8 +263,8 @@ public class MapsforgeMapView implements MapView {
     }
 
 
-    private NavigationPosition asPosition(LatLong latLong) {
-        return new Wgs84Position(latLong.longitude, latLong.latitude, null, null, null, null);
+    private NavigationPosition asNavigationPosition(LatLong latLong) {
+        return asPosition(latLong.longitude, latLong.latitude);
     }
 
     private LatLong asLatLong(NavigationPosition position) {
@@ -246,7 +273,7 @@ public class MapsforgeMapView implements MapView {
 
 
     public NavigationPosition getCenter() {
-        return asPosition(mapView.getModel().mapViewPosition.getCenter());
+        return asNavigationPosition(mapView.getModel().mapViewPosition.getCenter());
     }
 
     public void setCenter(NavigationPosition center) {
@@ -283,13 +310,9 @@ public class MapsforgeMapView implements MapView {
     }
 
     public void setSelectedPositions(int[] selectedPositions, boolean replaceSelection) {
-        // TODO this just adds markers, find elegant way to update/remove existing markers
-        for (int selectedPosition : selectedPositions) {
-            NavigationPosition position = positionsModel.getPosition(selectedPosition);
-            Marker marker = new Marker(asLatLong(position), markerIcon, 0, 0);
-            mapView.getLayerManager().getLayers().add(marker);
-            setCenter(position);
-        }
+        if(selectionUpdater == null)
+            return;
+        selectionUpdater.setSelectedPositions(selectedPositions, replaceSelection);
     }
 
     // listeners

@@ -34,7 +34,11 @@ import static org.mapsforge.core.util.MercatorProjection.latitudeToPixelY;
 import static org.mapsforge.core.util.MercatorProjection.longitudeToPixelX;
 import static slash.navigation.converter.gui.mapview.AwtGraphicMapView.GRAPHIC_FACTORY;
 
-// Inspired by Vass Gábor https://groups.google.com/forum/#!msg/mapsforge-dev/9svKL86y4aM/WdIay38iNeEJ
+/**
+ * A track line on {@link MapsforgeMapView}
+ *
+ * @author Christian Pesch, inspired by Vass Gábor https://groups.google.com/forum/#!msg/mapsforge-dev/9svKL86y4aM/WdIay38iNeEJ
+ */
 
 public class Polylines extends Layer {
     private static final Paint paint;
@@ -43,7 +47,6 @@ public class Polylines extends Layer {
         paint.setColor(BLUE);
         paint.setStrokeWidth(3);
     }
-
     private final List<LatLong> latLongs;
 
     public Polylines(List<LatLong> latLongs) {

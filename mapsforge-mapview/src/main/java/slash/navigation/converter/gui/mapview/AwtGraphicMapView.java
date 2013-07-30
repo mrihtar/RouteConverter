@@ -17,7 +17,6 @@
 
     Copyright (C) 2007 Christian Pesch. All Rights Reserved.
 */
-
 package slash.navigation.converter.gui.mapview;
 
 import org.mapsforge.core.graphics.GraphicFactory;
@@ -33,8 +32,16 @@ import org.mapsforge.map.view.FrameBuffer;
 
 import java.awt.*;
 
+import static org.mapsforge.map.awt.AwtGraphicFactory.INSTANCE;
+
+/**
+ * Implementation of a {@link org.mapsforge.map.view.MapView} {@link Container}.
+ *
+ * @author Christian Pesch, inspired by org.mapsforge.map.swing.view
+ */
+
 public class AwtGraphicMapView extends Container implements org.mapsforge.map.view.MapView {
-    static final GraphicFactory GRAPHIC_FACTORY = AwtGraphicFactory.INSTANCE;
+    static final GraphicFactory GRAPHIC_FACTORY = INSTANCE;
 
     private final FrameBuffer frameBuffer;
     private final LayerManager layerManager;

@@ -19,29 +19,19 @@
 */
 package slash.navigation.converter.gui.mapview;
 
-import org.mapsforge.map.model.MapViewModel;
+import slash.navigation.base.NavigationPosition;
 
-import java.awt.*;
-import java.awt.event.ComponentAdapter;
-import java.awt.event.ComponentEvent;
+import java.util.List;
 
 /**
- * Listen to mouse events of the {@link MapsforgeMapView}'s {@link MapViewModel}
+ * Operation to perform on selection.
  *
- * @author Christian Pesch, inspired by org.mapsforge.map.swing.view
+ * @author Christian Pesch
+ *
+ * @see SelectionUpdater
  */
 
-public class MapViewComponentListener extends ComponentAdapter {
-    private final AwtGraphicMapView mapView;
-    private final MapViewModel mapViewModel;
-
-    public MapViewComponentListener(AwtGraphicMapView mapView, MapViewModel mapViewModel) {
-        this.mapView = mapView;
-        this.mapViewModel = mapViewModel;
-    }
-
-    public void componentResized(ComponentEvent componentEvent) {
-        Dimension size = mapView.getSize();
-        mapViewModel.setDimension(new org.mapsforge.core.model.Dimension(size.width, size.height));
-    }
+public interface SelectionOperation {
+  void add(List<NavigationPosition> positions);
+  void remove(List<NavigationPosition> positions);
 }
