@@ -75,14 +75,15 @@ public abstract class BaseNmeaFormat extends SimpleFormat<NmeaRoute> {
     private static final NumberFormat LONGITUDE_NUMBER_FORMAT = DecimalFormat.getNumberInstance(US);
     private static final NumberFormat LATITUDE_NUMBER_FORMAT = DecimalFormat.getNumberInstance(US);
     static {
+        int MaximumFractionDigits = preferences.getInt("positionMaximumFractionDigits", 4);
         LONGITUDE_NUMBER_FORMAT.setGroupingUsed(false);
         LONGITUDE_NUMBER_FORMAT.setMinimumFractionDigits(4);
-        LONGITUDE_NUMBER_FORMAT.setMaximumFractionDigits(4);
+        LONGITUDE_NUMBER_FORMAT.setMaximumFractionDigits(MaximumFractionDigits);
         LONGITUDE_NUMBER_FORMAT.setMinimumIntegerDigits(5);
         LONGITUDE_NUMBER_FORMAT.setMaximumIntegerDigits(5);
         LATITUDE_NUMBER_FORMAT.setGroupingUsed(false);
         LATITUDE_NUMBER_FORMAT.setMinimumFractionDigits(4);
-        LATITUDE_NUMBER_FORMAT.setMaximumFractionDigits(4);
+        LATITUDE_NUMBER_FORMAT.setMaximumFractionDigits(MaximumFractionDigits);
         LATITUDE_NUMBER_FORMAT.setMinimumIntegerDigits(4);
         LATITUDE_NUMBER_FORMAT.setMaximumIntegerDigits(4);
     }
@@ -121,7 +122,7 @@ public abstract class BaseNmeaFormat extends SimpleFormat<NmeaRoute> {
                     else
                         position.setStartDate(startDate);
 
-                    if (haveDifferentLongitudeAndLatitude(previous, position) || haveDifferentTime(previous, position) && !validStartDate) {
+                    if (haveDifferentLongitudeAndLatitude(previous, position) || haveDifferentTime(previous, position)) {
                         positions.add(position);
                         previous = position;
                     } else {
@@ -140,21 +141,29 @@ public abstract class BaseNmeaFormat extends SimpleFormat<NmeaRoute> {
     }
 
     boolean haveDifferentLongitudeAndLatitude(NmeaPosition predecessor, NmeaPosition successor) {
-        return predecessor == null ||
-                (predecessor.hasCoordinates() && successor.hasCoordinates() &&
+        boolean diff;
+        if (predecessor == null) {
+            return true;
+        }
+        diff = (predecessor.hasCoordinates() && successor.hasCoordinates() &&
                         !(predecessor.getLongitudeAsValueAndOrientation().equals(successor.getLongitudeAsValueAndOrientation()) &&
                                 predecessor.getLatitudeAsValueAndOrientation().equals(successor.getLatitudeAsValueAndOrientation())));
+        return diff;
     }
 
     boolean haveDifferentTime(NmeaPosition predecessor, NmeaPosition successor) {
-        if(predecessor == null)
+        long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+        boolean diff;
+        if(predecessor == null) {
             return true;
-        if(!predecessor.hasTime() || !successor.hasTime())
+        }
+        if(!predecessor.hasTime() || !successor.hasTime()) {
             return false;
-        CompactCalendar predecessorTime = predecessor.getTime();
-        CompactCalendar successorTime = successor.getTime();
-        return predecessorTime.hasDateDefined() && successorTime.hasDateDefined() &&
-                !predecessorTime.equals(successorTime);
+        }
+        long predTimePortion = predecessor.getTime().getTimeInMillis() % MILLIS_PER_DAY;
+        long succTimePortion = successor.getTime().getTimeInMillis() % MILLIS_PER_DAY;
+        diff = predTimePortion != succTimePortion;
+        return diff;
     }
 
     private void mergePositions(NmeaPosition position, NmeaPosition toBeMergedInto, CompactCalendar originalStartDate) {
