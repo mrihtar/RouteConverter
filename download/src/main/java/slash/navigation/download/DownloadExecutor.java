@@ -20,15 +20,13 @@
 
 package slash.navigation.download;
 
-import slash.common.type.CompactCalendar;
 import slash.navigation.download.actions.Copier;
 import slash.navigation.download.actions.CopierListener;
 import slash.navigation.download.actions.Extractor;
 import slash.navigation.download.actions.Validator;
 import slash.navigation.rest.Get;
-import slash.navigation.rest.Head;
 
-import java.io.FileInputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,17 +35,9 @@ import java.util.logging.Logger;
 import static java.lang.String.format;
 import static java.util.logging.Logger.getLogger;
 import static slash.common.io.Directories.ensureDirectory;
+import static slash.common.io.Files.setLastModified;
 import static slash.common.type.CompactCalendar.fromMillis;
-import static slash.common.type.CompactCalendar.now;
-import static slash.navigation.download.State.ChecksumError;
-import static slash.navigation.download.State.Downloading;
-import static slash.navigation.download.State.Failed;
-import static slash.navigation.download.State.NoFileError;
-import static slash.navigation.download.State.Processing;
-import static slash.navigation.download.State.Resuming;
-import static slash.navigation.download.State.SizeError;
-import static slash.navigation.download.State.Succeeded;
-import static slash.navigation.download.State.TimestampError;
+import static slash.navigation.download.State.*;
 
 /**
  * Performs the {@link Download} of an URL to local file.
@@ -58,12 +48,15 @@ import static slash.navigation.download.State.TimestampError;
 public class DownloadExecutor implements Runnable {
     private static final Logger log = getLogger(DownloadExecutor.class.getName());
 
-    private Download download;
-    private DownloadTableModel model;
+    private final Download download;
+    private final DownloadManager downloadManager;
 
-    public DownloadExecutor(Download download, DownloadTableModel model) {
+    private Get get;
+
+    public DownloadExecutor(Download download, DownloadManager downloadManager) {
         this.download = download;
-        this.model = model;
+        this.downloadManager = downloadManager;
+        download.setState(Queued);
     }
 
     public Download getDownload() {
@@ -71,87 +64,52 @@ public class DownloadExecutor implements Runnable {
     }
 
     public void run() {
+        updateState(download, Running);
+
         try {
-            boolean success = true;
-            if (head())
+            boolean success = false;
+            if (canResume())
                 success = resume();
-
-            boolean tempFileComplete = download.getContentLength().equals(download.getTempFile().length());
-            if (!tempFileComplete)
+            if (!success)
                 success = download();
-
             if (success) {
-                State result = Succeeded;
-                setLastModified();
+                if (postProcess())
+                    succeeded(get.isNotModified());
 
-                Validator validator = new Validator(download.getTempFile());
-                if(!validator.existsFile())
-                    result = NoFileError;
-                else {
-                    if(!validator.validSize(download.getSize()))
-                        result = SizeError;
-                    if(!validator.validChecksum(download.getChecksum()))
-                        result = ChecksumError;
-                    if(!validator.validTimestamp(download.getTimestamp()))
-                        result = TimestampError;
-                }
-
-                postProcess();
-                updateState(download, result);
-                return;
-            }
+            } else if (get.isNotModified())
+                updateState(download, NotModified);
+            else
+                failed();
         } catch (Exception e) {
-            log.severe(format("Could not download content from %s: %s", download.getUrl(), e.getMessage()));
+            e.printStackTrace();
+            log.severe(format("Could not download content from %s: %s", download.getUrl(), e));
+            failed();
         }
-        updateState(download, Failed);
-
-        // finally set date of latest sync
-        download.setLastSync(now());
     }
 
-    private boolean head() throws IOException {
-        Long tempLastModified = download.getTempFile().exists() ? download.getTempFile().lastModified() : 0;
-
-        Head head = new Head(download.getUrl());
-        head.setIfModifiedSince(tempLastModified);
-        head.execute(true);
-        if (!head.isOk()) {
-            log.warning(format("HEAD request for %s failed, need to download", download.getUrl()));
-            return false;
-        }
-
-        CompactCalendar lastModified = head.getLastModified() != null ? fromMillis(head.getLastModified()) : null;
-
-        boolean contentLengthEquals = download.getContentLength() != null && download.getContentLength().equals(head.getContentLength());
-        boolean lastModifiedAfter = download.getLastModified() != null && (download.getLastModified().equals(lastModified) || download.getLastModified().after(lastModified));
-        boolean tempFileComplete = download.getContentLength() != null && download.getContentLength().equals(download.getTempFile().length());
-        if (contentLengthEquals && lastModifiedAfter && !tempFileComplete && head.getAcceptByteRanges())
-            return true;
-
-        if (!contentLengthEquals)
-            log.warning("HEAD content length is " + head.getContentLength() + " but download started with " + download.getContentLength() + " bytes, need to download");
-        download.setContentLength(head.getContentLength());
-
-        if (!lastModifiedAfter)
-            log.warning("HEAD last modified " + lastModified + " is later than " + download.getLastModified() + " when download started, need to download");
-        download.setLastModified(lastModified);
-
-        return false;
-    }
-
-    private void setLastModified() {
-        CompactCalendar lastModified = download.getLastModified();
-        if (lastModified != null) {
-            if(!download.getTempFile().setLastModified(lastModified.getTimeInMillis()))
-                log.warning("Could not set last modified of " + download.getTempFile() + " to " + lastModified);
-        }
+    private boolean canResume() {
+        Checksum checksum = download.getFile().getExpectedChecksum();
+        return download.getTempFile().exists() && download.getTempFile().length() > 0 &&
+                checksum != null && checksum.getContentLength() != null &&
+                checksum.getContentLength() > download.getTempFile().length();
     }
 
     private void updateState(Download download, State state) {
         download.setState(state);
-        model.updateDownload(download);
+        downloadManager.getModel().updateDownload(download);
+        log.fine(format("State for download from %s changed to %s", download.getUrl(), state));
     }
 
+    private void failed() {
+        updateState(download, Failed);
+        downloadManager.fireDownloadFailed(download);
+    }
+
+    private void succeeded(boolean notModified) {
+        updateState(download, Succeeded);
+        if (!notModified)
+            downloadManager.fireDownloadSucceeded(download);
+    }
 
     private class ModelUpdater implements CopierListener {
         public void expectingBytes(long byteCount) {
@@ -160,7 +118,9 @@ public class DownloadExecutor implements Runnable {
 
         public void processedBytes(long byteCount) {
             download.setProcessedBytes(byteCount);
-            model.updateDownload(download);
+            downloadManager.getModel().updateDownload(download);
+            if (download.getState().equals(Downloading))
+                downloadManager.fireDownloadProgressed(download);
         }
     }
 
@@ -169,56 +129,108 @@ public class DownloadExecutor implements Runnable {
     private boolean resume() throws IOException {
         updateState(download, Resuming);
         long fileSize = download.getTempFile().length();
-        Long contentLength = download.getContentLength();
+        Long contentLength = download.getFile().getExpectedChecksum() != null ? download.getFile().getExpectedChecksum().getContentLength() : null;
         log.info(format("Resuming bytes %d-%d from %s", fileSize, contentLength, download.getUrl()));
 
-        Get get = new Get(download.getUrl());
+        get = new Get(download.getUrl());
         get.setRange(fileSize, contentLength);
-        InputStream inputStream = get.executeAsStream(true);
-        if (get.isSuccessful() && get.isPartialContent()) {
-            modelUpdater.expectingBytes(contentLength);
+
+        InputStream inputStream = get.executeAsStream();
+        log.info(format("Resume from %s returned with status code %s", download.getUrl(), get.getStatusCode()));
+        if (get.isPartialContent()) {
+            modelUpdater.expectingBytes(contentLength != null ? contentLength : get.getContentLength() != null ? get.getContentLength() : 0);
             new Copier(modelUpdater).copyAndClose(inputStream, new FileOutputStream(download.getTempFile(), true), fileSize, contentLength);
             return true;
         }
-
         return false;
     }
 
     private boolean download() throws IOException {
         updateState(download, Downloading);
-        Long contentLength = download.getContentLength();
-        log.info(format("Downloading %d bytes from %s", contentLength, download.getUrl()));
+        Long contentLength = download.getFile().getExpectedChecksum() != null ? download.getFile().getExpectedChecksum().getContentLength() : null;
+        log.info(format("Downloading %d bytes from %s with ETag %s", contentLength, download.getUrl(), download.getETag()));
 
-        Get get = new Get(download.getUrl());
-        InputStream inputStream = get.executeAsStream(true);
-        if (get.isSuccessful()) {
-            modelUpdater.expectingBytes(contentLength);
+        get = new Get(download.getUrl());
+        if (new Validator(download).existTargets() && download.getETag() != null)
+            get.setIfNoneMatch(download.getETag());
+
+        InputStream inputStream = get.executeAsStream();
+        log.info(format("Download from %s returned with status code %s", download.getUrl(), get.getStatusCode()));
+        if (get.isSuccessful() && inputStream != null) {
+            modelUpdater.expectingBytes(contentLength != null ? contentLength : get.getContentLength() != null ? get.getContentLength() : 0);
             new Copier(modelUpdater).copyAndClose(inputStream, new FileOutputStream(download.getTempFile()), 0, contentLength);
+            download.setETag(get.getETag());
             return true;
         }
         return false;
     }
 
-    private void postProcess() throws IOException {
+    private boolean postProcess() throws IOException {
         updateState(download, Processing);
 
+        if (!bringToTarget())
+            return false;
+
+        if (!validate())
+            return false;
+
+        if (download.getTempFile().exists())
+            if (!download.getTempFile().delete())
+                throw new IOException(format("Cannot delete temp file %s", download.getTempFile()));
+
+        log.fine(format("Postprocess from %s successful: %s", download.getUrl(), get.isSuccessful()));
+        return true;
+    }
+
+    private boolean bringToTarget() throws IOException {
         Action action = download.getAction();
         switch (action) {
             case Copy:
-                ensureDirectory(download.getTarget().getParent());
-                new Copier(modelUpdater).copyAndClose(new FileInputStream(download.getTempFile()), new FileOutputStream(download.getTarget()), 0, download.getTempFile().length());
-                break;
+                return copy();
             case Flatten:
-                new Extractor(modelUpdater).flatten(download.getTempFile(), download.getTarget());
-                break;
+                return flatten();
             case Extract:
-                new Extractor(modelUpdater).extract(download.getTempFile(), download.getTarget());
-                break;
+                return extract();
             default:
                 throw new IllegalArgumentException("Unknown Action " + action);
         }
+    }
 
-        if (!download.getTempFile().delete())
-            throw new IOException(format("Cannot delete temp file %s", download.getTempFile()));
+    private boolean copy() throws IOException {
+        File target = download.getFile().getFile();
+        ensureDirectory(target.getParent());
+        new Copier(modelUpdater).copyAndClose(download.getTempFile(), target);
+        setLastModified(target, fromMillis(get.getLastModified()));
+        return true;
+    }
+
+    private boolean flatten() throws IOException {
+        File target = download.getFile().getFile();
+        new Extractor(modelUpdater).flatten(download.getTempFile(), target);
+        setLastModified(download.getTempFile(), fromMillis(get.getLastModified()));
+        return true;
+    }
+
+    private boolean extract() throws IOException {
+        File target = download.getFile().getFile();
+        new Extractor(modelUpdater).extract(download.getTempFile(), target);
+        setLastModified(download.getTempFile(), fromMillis(get.getLastModified()));
+        return true;
+    }
+
+    private boolean validate() throws IOException {
+        updateState(download, Validating);
+
+        Validator validator = new Validator(download);
+        validator.validate();
+
+        if (!validator.existTargets()) {
+            updateState(download, NoFileError);
+            return false;
+        } else if (!validator.isChecksumValid()) {
+            updateState(download, ChecksumError);
+            return false;
+        }
+        return true;
     }
 }

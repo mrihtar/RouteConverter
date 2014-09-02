@@ -42,7 +42,6 @@ public interface PositionsModel extends TableModel {
     BaseRoute getRoute();
     void setRoute(BaseRoute route);
 
-    String getStringAt(int rowIndex, int columnIndex);
     NavigationPosition getPosition(int rowIndex);
     int getIndex(NavigationPosition position);
     List<NavigationPosition> getPositions(int[] rowIndices);
@@ -57,7 +56,7 @@ public interface PositionsModel extends TableModel {
     void add(int rowIndex, BaseRoute<BaseNavigationPosition, BaseNavigationFormat> route) throws IOException;
     void add(int rowIndex, List<BaseNavigationPosition> positions);
 
-    void edit(int rowIndex, int firstColumnIndex, Object firstValue, int secondColumnIndex, Object secondValue, boolean fireEvent, boolean trackUndo);
+    void edit(int rowIndex, PositionColumnValues columnToValues, boolean fireEvent, boolean trackUndo);
 
     void remove(int firstIndex, int lastIndex);
     void remove(int[] rowIndices);

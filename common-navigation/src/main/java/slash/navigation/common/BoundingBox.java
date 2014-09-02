@@ -47,8 +47,8 @@ public class BoundingBox {
     }
 
     public BoundingBox(List<? extends NavigationPosition> positions) {
-        double maximumLongitude = -180.0, maximumLatitude = -180.0,
-                minimumLongitude = 180.0, minimumLatitude = 180.0;
+        double maximumLongitude = -180.0, maximumLatitude = -90.0,
+                minimumLongitude = 180.0, minimumLatitude = 90.0;
         CompactCalendar maximumTime = null, minimumTime = null;
 
         for (NavigationPosition position : positions) {
@@ -86,6 +86,14 @@ public class BoundingBox {
         return southWest;
     }
 
+    public NavigationPosition getSouthEast() {
+        return new SimpleNavigationPosition(northEast.getLongitude(), southWest.getLatitude());
+    }
+
+    public NavigationPosition getNorthWest() {
+        return new SimpleNavigationPosition(southWest.getLongitude(), northEast.getLatitude());
+    }
+
     public boolean contains(NavigationPosition position) {
         boolean result = position.getLongitude() > southWest.getLongitude();
         result = result && (position.getLongitude() < northEast.getLongitude());
@@ -94,11 +102,18 @@ public class BoundingBox {
         return result;
     }
 
-    private static final double DIV_BY_ZERO_AVOIDANCE_OFFSET = 0.000000000001;
+    public boolean contains(BoundingBox boundingBox) {
+        return contains(boundingBox.getNorthEast()) && contains(boundingBox.getSouthEast()) &&
+                contains(boundingBox.getSouthWest()) && contains(boundingBox.getNorthWest());
+    }
 
     public NavigationPosition getCenter() {
-        double longitude = (southWest.getLongitude() + northEast.getLongitude() + DIV_BY_ZERO_AVOIDANCE_OFFSET) / 2;
-        double latitude = (southWest.getLatitude() + northEast.getLatitude() + DIV_BY_ZERO_AVOIDANCE_OFFSET) / 2;
+        double longitude = southWest.getLongitude() + northEast.getLongitude();
+        if(longitude != 0.0)
+            longitude /=2;
+        double latitude = southWest.getLatitude() + northEast.getLatitude();
+        if (latitude != 0.0)
+            latitude /=2;
         CompactCalendar time = null;
         if (northEast.hasTime() && southWest.hasTime()) {
             long millis = northEast.getTime().getTimeInMillis() +
@@ -106,5 +121,25 @@ public class BoundingBox {
             time = fromMillis(millis);
         }
         return new SimpleNavigationPosition(longitude, latitude, time);
+    }
+
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        BoundingBox that = (BoundingBox) o;
+
+        return !(northEast != null ? !northEast.equals(that.northEast) : that.northEast != null) &&
+                !(southWest != null ? !southWest.equals(that.southWest) : that.southWest != null);
+    }
+
+    public int hashCode() {
+        int result = northEast != null ? northEast.hashCode() : 0;
+        result = 31 * result + (southWest != null ? southWest.hashCode() : 0);
+        return result;
+    }
+
+    public String toString() {
+        return  getClass().getSimpleName() + "[northEast=" + northEast + ", southWest=" + southWest + "]";
     }
 }

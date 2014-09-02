@@ -26,15 +26,11 @@ import slash.navigation.base.BaseRoute;
 import slash.navigation.base.RouteCharacteristics;
 import slash.navigation.common.BoundingBox;
 import slash.navigation.common.NavigationPosition;
+import slash.navigation.common.PositionPair;
 import slash.navigation.common.SimpleNavigationPosition;
-import slash.navigation.converter.gui.augment.PositionAugmenter;
-import slash.navigation.converter.gui.models.CharacteristicsModel;
-import slash.navigation.converter.gui.models.PositionsModel;
-import slash.navigation.converter.gui.models.PositionsSelectionModel;
-import slash.navigation.converter.gui.models.UnitSystemModel;
+import slash.navigation.converter.gui.models.*;
 import slash.navigation.nmn.NavigatingPoiWarnerFormat;
 
-import javax.swing.*;
 import javax.swing.event.*;
 import java.awt.event.ComponentEvent;
 import java.awt.event.ComponentListener;
@@ -56,9 +52,11 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.Thread.sleep;
+import static java.util.Arrays.asList;
 import static java.util.Calendar.SECOND;
 import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.SwingUtilities.invokeLater;
 import static javax.swing.event.ListDataEvent.CONTENTS_CHANGED;
@@ -69,6 +67,7 @@ import static slash.common.type.CompactCalendar.fromCalendar;
 import static slash.navigation.base.RouteCharacteristics.*;
 import static slash.navigation.converter.gui.models.CharacteristicsModel.IGNORE;
 import static slash.navigation.converter.gui.models.PositionColumns.*;
+import static slash.navigation.gui.events.Range.asRange;
 import static slash.navigation.gui.helpers.JTableHelper.isFirstToLastRow;
 
 /**
@@ -90,13 +89,13 @@ public abstract class BaseMapView implements MapView {
     private static final String CENTER_LATITUDE_PREFERENCE = "centerLatitude";
     private static final String CENTER_LONGITUDE_PREFERENCE = "centerLongitude";
     private static final String CENTER_ZOOM_PREFERENCE = "centerZoom";
+    private static final String RECENTER_MAP_PREFERENCE = "recenterMap";
 
     private PositionsModel positionsModel;
     private List<NavigationPosition> positions;
     private PositionsSelectionModel positionsSelectionModel;
     private List<NavigationPosition> lastSelectedPositions;
     private int[] selectedPositionIndices = new int[0];
-    private NavigationPosition center;
     private int lastZoom = -1;
 
     private ServerSocket callbackListenerServerSocket;
@@ -104,44 +103,38 @@ public abstract class BaseMapView implements MapView {
 
     protected final Object notificationMutex = new Object();
     protected boolean initialized = false;
-    private boolean recenterAfterZooming, showCoordinates, showWaypointDescription, avoidHighways, avoidTolls,
-            running = true,
+    private boolean recenterAfterZooming, showCoordinates, showWaypointDescription, running = true,
             haveToInitializeMapOnFirstStart = true, haveToRepaintSelectionImmediately = false,
             haveToRepaintRouteImmediately = false, haveToRecenterMap = false,
             haveToUpdateRoute = false, haveToReplaceRoute = false,
             haveToRepaintSelection = false, ignoreNextZoomCallback = false;
-    private TravelMode travelMode;
     private UnitSystemModel unitSystemModel;
     private String routeUpdateReason = "?", selectionUpdateReason = "?";
-    private PositionAugmenter positionAugmenter;
+    private MapViewCallback mapViewCallback;
     private PositionReducer positionReducer;
     private final ExecutorService executor = newCachedThreadPool();
-    private int overQueryLimitCount = 0;
+    private int overQueryLimitCount = 0, zeroResultsCount = 0;
 
     // initialization
 
     public void initialize(PositionsModel positionsModel,
                            PositionsSelectionModel positionsSelectionModel,
                            CharacteristicsModel characteristicsModel,
-                           PositionAugmenter positionAugmenter,
+                           MapViewCallback mapViewCallback,
                            boolean recenterAfterZooming,
                            boolean showCoordinates, boolean showWaypointDescription,
-                           TravelMode travelMode, boolean avoidHighways, boolean avoidTolls,
                            UnitSystemModel unitSystemModel) {
+        this.mapViewCallback = mapViewCallback;
         initializeBrowser();
         setModel(positionsModel, positionsSelectionModel, characteristicsModel, unitSystemModel);
-        this.positionAugmenter = positionAugmenter;
         this.recenterAfterZooming = recenterAfterZooming;
         this.showCoordinates = showCoordinates;
         this.showWaypointDescription = showWaypointDescription;
-        this.travelMode = travelMode;
-        this.avoidHighways = avoidHighways;
-        this.avoidTolls = avoidTolls;
     }
 
     protected abstract void initializeBrowser();
 
-    protected void setModel(PositionsModel positionsModel,
+    protected void setModel(final PositionsModel positionsModel,
                             PositionsSelectionModel positionsSelectionModel,
                             CharacteristicsModel characteristicsModel,
                             final UnitSystemModel unitSystemModel) {
@@ -199,6 +192,12 @@ public abstract class BaseMapView implements MapView {
         unitSystemModel.addChangeListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 setDegreeFormat();
+            }
+        });
+        mapViewCallback.addChangeListener(new ChangeListener() {
+            public void stateChanged(ChangeEvent e) {
+                if (positionsModel.getRoute().getCharacteristics().equals(Route))
+                    update(false);
             }
         });
         positionReducer = new PositionReducer(new PositionReducer.Callback() {
@@ -299,7 +298,7 @@ public abstract class BaseMapView implements MapView {
                                     " haveToReplaceRoute:" + haveToReplaceRoute +
                                     " haveToRepaintRouteImmediately:" + haveToRepaintRouteImmediately);
                             copiedPositions = new ArrayList<NavigationPosition>(positions);
-                            recenter = haveToReplaceRoute;
+                            recenter = isRecenteringMap() && haveToReplaceRoute;
                             haveToUpdateRoute = false;
                             haveToReplaceRoute = false;
                             haveToRepaintRouteImmediately = false;
@@ -359,7 +358,7 @@ public abstract class BaseMapView implements MapView {
                                     " haveToRepaintSelection: " + haveToRepaintSelection +
                                     " haveToRepaintSelectionImmediately: " + haveToRepaintSelectionImmediately +
                                     " haveToRecenterMap: " + haveToRecenterMap);
-                            recenter = haveToRecenterMap;
+                            recenter = isRecenteringMap() && haveToRecenterMap;
                             haveToRecenterMap = false;
                             haveToRepaintSelectionImmediately = false;
                             haveToRepaintSelection = false;
@@ -371,7 +370,7 @@ public abstract class BaseMapView implements MapView {
                     }
 
                     List<NavigationPosition> render = positionReducer.reduceSelectedPositions(copiedPositions, copiedSelectedPositionIndices);
-                    NavigationPosition centerPosition = center != null ? center : render.size() > 0 ? render.get(0) : null;
+                    NavigationPosition centerPosition = render.size() > 0 ? new BoundingBox(render).getCenter() : null;
                     selectPositions(render, recenter ? centerPosition : null);
                     log.info("Selected positions updated for " + render.size() + " positions, recentering: " + recenter + " to: " + centerPosition);
                     lastTime = currentTimeMillis();
@@ -390,7 +389,7 @@ public abstract class BaseMapView implements MapView {
             setCallbackListenerPort(port);
             return serverSocket;
         } catch (IOException e) {
-            log.severe("Cannot open callback listener socket: " + e.getMessage());
+            log.severe("Cannot open callback listener socket: " + e);
             return null;
         }
     }
@@ -416,7 +415,7 @@ public abstract class BaseMapView implements MapView {
                                 try {
                                     processStream(socket);
                                 } catch (IOException e) {
-                                    log.severe("Cannot process stream from callback listener socket: " + e.getMessage());
+                                    log.severe("Cannot process stream from callback listener socket: " + e);
                                 }
                             }
                         });
@@ -426,7 +425,7 @@ public abstract class BaseMapView implements MapView {
                         synchronized (notificationMutex) {
                             //noinspection ConstantConditions
                             if (running) {
-                                log.severe("Cannot accept callback listener socket: " + e.getMessage());
+                                log.severe("Cannot accept callback listener socket: " + e);
                             }
                         }
                     }
@@ -486,7 +485,7 @@ public abstract class BaseMapView implements MapView {
             log.severe(message);
             invokeLater(new Runnable() {
                 public void run() {
-                    showMessageDialog(getComponent(), message, "Error", JOptionPane.ERROR_MESSAGE);
+                    showMessageDialog(getComponent(), message, "Error", ERROR_MESSAGE);
                 }
             });
         }
@@ -554,9 +553,6 @@ public abstract class BaseMapView implements MapView {
             notificationMutex.notifyAll();
         }
 
-        if (positionAugmenter != null)
-            positionAugmenter.interrupt();
-
         if (selectionUpdater != null) {
             try {
                 safeJoin(selectionUpdater);
@@ -581,7 +577,7 @@ public abstract class BaseMapView implements MapView {
             try {
                 callbackListenerServerSocket.close();
             } catch (IOException e) {
-                log.warning("Cannot close callback listener socket:" + e.getMessage());
+                log.warning("Cannot close callback listener socket:" + e);
             }
             long end = currentTimeMillis();
             log.info("CallbackListenerSocket stopped after " + (end - start) + " ms");
@@ -655,7 +651,7 @@ public abstract class BaseMapView implements MapView {
 
     public void setShowCoordinates(boolean showCoordinates) {
         this.showCoordinates = showCoordinates;
-        setCoordinates();
+        setShowCoordinates();
     }
 
     public void setShowWaypointDescription(boolean showWaypointDescription) {
@@ -664,25 +660,7 @@ public abstract class BaseMapView implements MapView {
             update(false);
     }
 
-    public void setTravelMode(TravelMode travelMode) {
-        this.travelMode = travelMode;
-        if (positionsModel.getRoute().getCharacteristics() == Route)
-            update(false);
-    }
-
-    public void setAvoidHighways(boolean avoidHighways) {
-        this.avoidHighways = avoidHighways;
-        if (positionsModel.getRoute().getCharacteristics() == Route)
-            update(false);
-    }
-
-    public void setAvoidTolls(boolean avoidTolls) {
-        this.avoidTolls = avoidTolls;
-        if (positionsModel.getRoute().getCharacteristics() == Route)
-            update(false);
-    }
-
-    protected void setCoordinates() {
+    protected void setShowCoordinates() {
         executeScript("setShowCoordinates(" + showCoordinates + ");");
     }
 
@@ -697,16 +675,15 @@ public abstract class BaseMapView implements MapView {
             return getLastMapCenter();
     }
 
-    public void setCenter(NavigationPosition center) {
-        this.center = center;
-    }
-
     private int getZoom() {
         return preferences.getInt(CENTER_ZOOM_PREFERENCE, 2);
     }
-
     private void setZoom(int zoom) {
         preferences.putInt(CENTER_ZOOM_PREFERENCE, zoom);
+    }
+
+    private boolean isRecenteringMap() {
+        return preferences.getBoolean(RECENTER_MAP_PREFERENCE, true);
     }
 
     protected abstract NavigationPosition getNorthEastBounds();
@@ -817,9 +794,10 @@ public abstract class BaseMapView implements MapView {
             buffer.append("destination: new google.maps.LatLng(").append(destination.getLatitude()).
                     append(",").append(destination.getLongitude()).append("), ");
             buffer.append("waypoints: [").append(waypoints).append("], ").
-                    append("travelMode: google.maps.DirectionsTravelMode.").append(travelMode.toString().toUpperCase()).append(", ");
-            buffer.append("avoidHighways: ").append(avoidHighways).append(", ");
-            buffer.append("avoidTolls: ").append(avoidTolls).append(", ");
+                    append("travelMode: google.maps.DirectionsTravelMode.").append(mapViewCallback.getTravelMode().getName().toUpperCase()).append(", ");
+            buffer.append("avoidFerries: ").append(mapViewCallback.isAvoidFerries()).append(", ");
+            buffer.append("avoidHighways: ").append(mapViewCallback.isAvoidHighways()).append(", ");
+            buffer.append("avoidTolls: ").append(mapViewCallback.isAvoidTolls()).append(", ");
             buffer.append("region: \"").append(Locale.getDefault().getCountry().toLowerCase()).append("\"}, ");
             int startIndex = positionsModel.getIndex(origin);
             buffer.append(startIndex).append(", ");
@@ -937,24 +915,6 @@ public abstract class BaseMapView implements MapView {
         executeScript(buffer.toString());
     }
 
-    private static class PositionPair {
-        private NavigationPosition from;
-        private NavigationPosition to;
-
-        private PositionPair(NavigationPosition from, NavigationPosition to) {
-            this.from = from;
-            this.to = to;
-        }
-
-        private NavigationPosition getFrom() {
-            return from;
-        }
-
-        private NavigationPosition getTo() {
-            return to;
-        }
-    }
-
     private final Map<Integer, PositionPair> insertWaypointsQueue = new LinkedHashMap<Integer, PositionPair>();
     private final ExecutorService insertWaypointsExecutor = newSingleThreadExecutor();
 
@@ -978,15 +938,16 @@ public abstract class BaseMapView implements MapView {
             public void run() {
                 for (Integer key : addToQueue.keySet()) {
                     PositionPair pair = addToQueue.get(key);
-                    NavigationPosition origin = pair.getFrom();
-                    NavigationPosition destination = pair.getTo();
+                    NavigationPosition origin = pair.getFirst();
+                    NavigationPosition destination = pair.getSecond();
                     StringBuilder buffer = new StringBuilder();
                     buffer.append(mode).append("({");
                     buffer.append("origin: new google.maps.LatLng(").append(origin.getLatitude()).append(",").append(origin.getLongitude()).append("), ");
                     buffer.append("destination: new google.maps.LatLng(").append(destination.getLatitude()).append(",").append(destination.getLongitude()).append("), ");
-                    buffer.append("travelMode: google.maps.DirectionsTravelMode.").append(travelMode.toString().toUpperCase()).append(", ");
-                    buffer.append("avoidHighways: ").append(avoidHighways).append(", ");
-                    buffer.append("avoidTolls: ").append(avoidTolls).append(", ");
+                    buffer.append("travelMode: google.maps.DirectionsTravelMode.").append(mapViewCallback.getTravelMode().getName().toUpperCase()).append(", ");
+                    buffer.append("avoidFerries: ").append(mapViewCallback.isAvoidFerries()).append(", ");
+                    buffer.append("avoidHighways: ").append(mapViewCallback.isAvoidHighways()).append(", ");
+                    buffer.append("avoidTolls: ").append(mapViewCallback.isAvoidTolls()).append(", ");
                     buffer.append("region: \"").append(Locale.getDefault().getCountry().toLowerCase()).append("\"}, ");
                     buffer.append(key).append(");\n");
                     executeScript(buffer.toString());
@@ -1061,7 +1022,7 @@ public abstract class BaseMapView implements MapView {
                         processingPost = true;
                     lines.add(line);
                 } catch (IOException e) {
-                    log.severe("Cannot read line from callback listener port:" + e.getMessage());
+                    log.severe("Cannot read line from callback listener port:" + e);
                     break;
                 }
             }
@@ -1148,6 +1109,7 @@ public abstract class BaseMapView implements MapView {
     private static final Pattern CENTER_CHANGED_PATTERN = Pattern.compile("^center-changed/(.*)/(.*)$");
     private static final Pattern CALLBACK_PORT_PATTERN = Pattern.compile("^callback-port/(\\d+)$");
     private static final Pattern OVER_QUERY_LIMIT_PATTERN = Pattern.compile("^over-query-limit$");
+    private static final Pattern ZERO_RESULTS_PATTERN = Pattern.compile("^zero-results$");
     private static final Pattern INSERT_WAYPOINTS_PATTERN = Pattern.compile("^(Insert-All-Waypoints|Insert-Only-Turnpoints): (-?\\d+)/(.*)$");
 
     boolean processCallback(String callback) {
@@ -1278,6 +1240,13 @@ public abstract class BaseMapView implements MapView {
             return true;
         }
 
+        Matcher zeroResultsMatcher = ZERO_RESULTS_PATTERN.matcher(callback);
+        if (zeroResultsMatcher.matches()) {
+            zeroResultsCount++;
+            log.warning("Google Directions API returns zero results, count: " + zeroResultsCount);
+            return true;
+        }
+
         Matcher insertWaypointsMatcher = INSERT_WAYPOINTS_PATTERN.matcher(callback);
         if (insertWaypointsMatcher.matches()) {
             Integer key = parseInt(insertWaypointsMatcher.group(2));
@@ -1291,8 +1260,8 @@ public abstract class BaseMapView implements MapView {
             if (coordinates.size() < 5 || pair == null)
                 return true;
 
-            final NavigationPosition before = pair.getFrom();
-            NavigationPosition after = pair.getTo();
+            final NavigationPosition before = pair.getFirst();
+            NavigationPosition after = pair.getSecond();
             final BaseRoute route = parseRoute(coordinates, before, after);
             synchronized (notificationMutex) {
                 int row = positions.indexOf(before) + 1;
@@ -1419,7 +1388,7 @@ public abstract class BaseMapView implements MapView {
                 time = fromCalendar(calendar);
             }
             int positionNumber = positionsModel.getRowCount() + (positionInsertionCount - route.getPositionCount()) - 1;
-            String description = instructions != null ? instructions : positionAugmenter.createDescription(positionNumber);
+            String description = instructions != null ? instructions : mapViewCallback.createDescription(positionNumber, null);
             BaseNavigationPosition position = route.createPosition(longitude, latitude, null, null, seconds != null ? time : null, description);
             if (!isDuplicate(before, position) && !isDuplicate(after, position)) {
                 route.add(0, position);
@@ -1433,29 +1402,21 @@ public abstract class BaseMapView implements MapView {
         try {
             positionsModel.add(row, route);
         } catch (IOException e) {
-            log.severe("Cannot insert route: " + e.getMessage());
+            log.severe("Cannot insert route: " + e);
         }
     }
 
-    @SuppressWarnings({"unchecked"})
     private void complementPositions(int row, BaseRoute route) {
-        List<NavigationPosition> positions = route.getPositions();
-        int index = row;
-        for (NavigationPosition position : positions) {
-            // do not complement description since this is limited to 2500 calls/day
-            positionAugmenter.complementElevation(index, position.getLongitude(), position.getLatitude());
-            positionAugmenter.complementTime(index, position.getTime(), false);
-            index++;
-        }
+        int[] rows = asRange(row, row + route.getPositions().size());
+        // do not complement description since this is limited to 2500 calls/day
+        mapViewCallback.complementData(rows, false, true, true);
     }
 
-    private void insertPosition(int row, Double longitude, Double latitude) { // TODO unify with different code path from AddPositionAction
-        positionsModel.add(row, longitude, latitude, null, null, null, positionAugmenter.createDescription(positionsModel.getRowCount() + 1));
-        positionsSelectionModel.setSelectedPositions(new int[]{row}, true);
-
-        positionAugmenter.complementDescription(row, longitude, latitude);
-        positionAugmenter.complementElevation(row, longitude, latitude);
-        positionAugmenter.complementTime(row, null, true);
+    private void insertPosition(int row, Double longitude, Double latitude) {
+        positionsModel.add(row, longitude, latitude, null, null, null, mapViewCallback.createDescription(positionsModel.getRowCount() + 1, null));
+        int[] rows = new int[]{row};
+        positionsSelectionModel.setSelectedPositions(rows, true);
+        mapViewCallback.complementData(rows, true, true, true);
     }
 
     private int getAddRow() {
@@ -1484,7 +1445,7 @@ public abstract class BaseMapView implements MapView {
         boolean cleanElevation = preferences.getBoolean(CLEAN_ELEVATION_ON_MOVE_PREFERENCE, false);
         boolean complementElevation = preferences.getBoolean(COMPLEMENT_ELEVATION_ON_MOVE_PREFERENCE, true);
         boolean cleanTime = preferences.getBoolean(CLEAN_TIME_ON_MOVE_PREFERENCE, false);
-        boolean complementTime = preferences.getBoolean(COMPLEMENT_TIME_ON_MOVE_PREFERENCE, false);
+        boolean complementTime = preferences.getBoolean(COMPLEMENT_TIME_ON_MOVE_PREFERENCE, true);
 
         int minimum = row;
         for (int index : selectedPositionIndices) {
@@ -1499,22 +1460,20 @@ public abstract class BaseMapView implements MapView {
                 if (!moveCompleteSelection)
                     continue;
 
-                positionsModel.edit(index, LONGITUDE_COLUMN_INDEX, position.getLongitude() + diffLongitude,
-                        LATITUDE_COLUMN_INDEX, position.getLatitude() + diffLatitude, false, true);
+                positionsModel.edit(index, new PositionColumnValues(asList(LONGITUDE_COLUMN_INDEX, LATITUDE_COLUMN_INDEX),
+                                Arrays.<Object>asList( position.getLongitude() + diffLongitude, position.getLatitude() + diffLatitude)), false, true);
             } else {
-                positionsModel.edit(index, LONGITUDE_COLUMN_INDEX, longitude,
-                        LATITUDE_COLUMN_INDEX, latitude, false, true);
+                positionsModel.edit(index, new PositionColumnValues(asList(LONGITUDE_COLUMN_INDEX, LATITUDE_COLUMN_INDEX),
+                        Arrays.<Object>asList(longitude, latitude)), false, true);
             }
 
-            if (cleanElevation)
-                positionsModel.edit(index, ELEVATION_COLUMN_INDEX, null, -1, null, false, false);
-            if (complementElevation)
-                positionAugmenter.complementElevation(row, position.getLongitude(), position.getLatitude());
-
             if (cleanTime)
-                positionsModel.edit(index, TIME_COLUMN_INDEX, null, -1, null, false, false);
-            if (complementTime)
-                positionAugmenter.complementTime(index, null, true);
+                positionsModel.edit(index, new PositionColumnValues(DATE_TIME_COLUMN_INDEX, null), false, false);
+            if (cleanElevation)
+                positionsModel.edit(index, new PositionColumnValues(ELEVATION_COLUMN_INDEX, null), false, false);
+
+            if (complementTime || complementElevation)
+                mapViewCallback.complementData(new int[]{index}, false, complementTime, complementElevation);
         }
 
         // updating all rows behind the modified is quite expensive, but necessary due to the distance

@@ -60,7 +60,7 @@ public abstract class Application {
     private static final String PREFERRED_COUNTRY_PREFERENCE = "preferredCountry";
 
     Application() {
-        exitListeners = new CopyOnWriteArrayList<ExitListener>();
+        exitListeners = new CopyOnWriteArrayList<>();
         context = new ApplicationContext();
     }
 
@@ -104,7 +104,7 @@ public abstract class Application {
             Method method = clazz.getMethod(name);
             method.invoke(null);
         } catch (Exception e) {
-            log.info("Cannot invoke NativeInterface#" + name + "(): " + e.getMessage());
+            log.info("Cannot invoke NativeInterface#" + name + "(): " + e);
         }
     }
 
@@ -223,6 +223,7 @@ public abstract class Application {
     }
 
     protected void shutdown() {
+        getContext().getNotificationManager().dispose();
     }
 
     void end() {

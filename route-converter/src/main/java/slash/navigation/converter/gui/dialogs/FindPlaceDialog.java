@@ -23,13 +23,15 @@ package slash.navigation.converter.gui.dialogs;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.intellij.uiDesigner.core.Spacer;
+import slash.navigation.base.BaseNavigationPosition;
+import slash.navigation.base.BaseRoute;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.RouteConverter;
-import slash.navigation.gui.actions.DialogAction;
 import slash.navigation.converter.gui.models.PositionsModel;
 import slash.navigation.converter.gui.renderer.GoogleMapsPositionListCellRenderer;
 import slash.navigation.googlemaps.GoogleMapsService;
 import slash.navigation.gui.SimpleDialog;
+import slash.navigation.gui.actions.DialogAction;
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -49,11 +51,10 @@ import static java.awt.event.KeyEvent.VK_ESCAPE;
 import static javax.swing.JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
-import static slash.common.io.Transfer.isEmpty;
 import static slash.navigation.gui.helpers.JMenuHelper.setMnemonic;
 
 /**
- * Dialog for finding and inserting {@link slash.navigation.base.BaseNavigationPosition}s into the current {@link slash.navigation.base.BaseRoute}.
+ * Dialog for finding and inserting {@link BaseNavigationPosition}s into the current {@link BaseRoute}.
  *
  * @author Christian Pesch
  */
@@ -164,11 +165,10 @@ public class FindPlaceDialog extends SimpleDialog {
             NavigationPosition position = (NavigationPosition) objects[i];
             positionsModel.add(insertRow, position.getLongitude(), position.getLatitude(),
                     position.getElevation(), null, null, position.getDescription());
-            r.getPositionsSelectionModel().setSelectedPositions(new int[]{insertRow}, true);
 
-            if (isEmpty(position.getElevation()))
-                r.complementElevation(insertRow, position.getLongitude(), position.getLatitude());
-            r.complementTime(insertRow, null);
+            int[] rows = new int[]{insertRow};
+            r.getPositionsSelectionModel().setSelectedPositions(rows, true);
+            r.getBatchPositionAugmenter().addData(rows, false, true, true);
         }
     }
 

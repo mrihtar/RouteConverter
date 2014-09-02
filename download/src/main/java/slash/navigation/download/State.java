@@ -28,13 +28,15 @@ package slash.navigation.download;
 
 public enum State {
     Queued,
+    Running,
     Resuming,
     Downloading,
     Processing,
+    Validating,
+
+    NotModified,
     Succeeded,
     NoFileError,
     ChecksumError,
-    SizeError,
-    TimestampError,
     Failed
 }

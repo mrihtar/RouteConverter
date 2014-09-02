@@ -42,9 +42,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketException;
 import java.net.URI;
+import java.util.List;
 import java.util.logging.Logger;
 
 import static java.lang.String.format;
+import static java.util.Arrays.asList;
 import static org.apache.http.HttpStatus.*;
 import static org.apache.http.HttpVersion.HTTP_1_1;
 import static slash.common.io.InputOutput.readBytes;
@@ -61,6 +63,7 @@ public abstract class HttpRequest {
     private final HttpClientBuilder clientBuilder = HttpClientBuilder.create();
     private final HttpRequestBase method;
     private HttpResponse response;
+    private HttpClientContext context;
 
     HttpRequest(HttpRequestBase method) {
         this.log = Logger.getLogger(getClass().getName());
@@ -85,15 +88,13 @@ public abstract class HttpRequest {
     private void setAuthentication(String userName, String password, AuthScope authScope) {
         CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
         credentialsProvider.setCredentials(authScope, new UsernamePasswordCredentials(userName, password));
-        clientBuilder.setDefaultCredentialsProvider(credentialsProvider);
-
-        // preemptive authentication
         AuthCache authCache = new BasicAuthCache();
         BasicScheme basicAuth = new BasicScheme();
         HttpHost targetHost = new HttpHost(authScope.getHost(), authScope.getPort(), authScope.getScheme());
         authCache.put(targetHost, basicAuth);
-        HttpClientContext localContext = HttpClientContext.create();
-        localContext.setAuthCache(authCache);
+        context = HttpClientContext.create();
+        context.setAuthCache(authCache);
+        context.setCredentialsProvider(credentialsProvider);
     }
 
     private void setAuthentication(Credentials credentials) {
@@ -117,9 +118,9 @@ public abstract class HttpRequest {
         return false;
     }
 
-    protected HttpResponse doExecute() throws IOException {
+    protected HttpResponse execute() throws IOException {
         try {
-            return clientBuilder.build().execute(method);
+            return clientBuilder.build().execute(method, context);
         } catch (SocketException e) {
             if (throwsSocketExceptionIfUnAuthorized())
                 return new BasicHttpResponse(HTTP_1_1, SC_UNAUTHORIZED, "socket exception since unauthorized");
@@ -128,20 +129,16 @@ public abstract class HttpRequest {
         }
     }
 
-    public String execute() throws IOException {
-        return execute(true);
-    }
-
-    public String execute(boolean logUnsuccessful) throws IOException {
+    public String executeAsString() throws IOException {
         try {
-            this.response = doExecute();
+            this.response = execute();
             // no response body then
             if (isUnAuthorized())
                 return null;
             HttpEntity entity = response.getEntity();
             // HEAD requests don't have a body
             String body = entity != null ? new String(readBytes(entity.getContent()), UTF8_ENCODING) : null;
-            if (!isSuccessful() && logUnsuccessful && body != null)
+            if (!isSuccessful() && body != null)
                 log.warning(body);
             return body;
         } finally {
@@ -149,18 +146,19 @@ public abstract class HttpRequest {
         }
     }
 
-    public InputStream executeAsStream(boolean logUnsuccessful) throws IOException {
-        this.response = doExecute();
+    public InputStream executeAsStream() throws IOException {
+        this.response = execute();
         // no response body then
         if (isUnAuthorized())
             return null;
-        InputStream body = response.getEntity().getContent();
-        if (!isSuccessful() && logUnsuccessful)
+        HttpEntity entity = response.getEntity();
+        InputStream body = entity != null ? entity.getContent() : null;
+        if (!isSuccessful() && !isNotModified())
             log.warning(format("Cannot read response body for %s", method.getURI()));
         return body;
     }
 
-    private void release() throws IOException {
+    public void release() throws IOException {
         if(response instanceof Closeable)
             ((Closeable)response).close();
         method.reset();
@@ -177,6 +175,11 @@ public abstract class HttpRequest {
         return header != null ? header.getValue() : null;
     }
 
+    public/*for tests*/ List<Header> getHeaders() throws IOException {
+        assertExecuted();
+        return asList(response.getAllHeaders());
+    }
+
     public int getStatusCode() throws IOException {
         assertExecuted();
         return response.getStatusLine().getStatusCode();
@@ -188,6 +191,10 @@ public abstract class HttpRequest {
 
     public boolean isOk() throws IOException {
         return getStatusCode() == SC_OK;
+    }
+
+    public boolean isNotModified() throws IOException {
+        return getStatusCode() == SC_NOT_MODIFIED;
     }
 
     public boolean isPartialContent() throws IOException {

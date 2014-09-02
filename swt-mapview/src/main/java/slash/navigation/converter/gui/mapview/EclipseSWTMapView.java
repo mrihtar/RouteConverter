@@ -36,6 +36,7 @@ import static chrriis.dj.nativeswing.swtimpl.components.JWebBrowser.useXULRunner
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.Math.max;
 import static java.lang.System.currentTimeMillis;
+import static java.lang.Thread.sleep;
 import static javax.swing.SwingUtilities.invokeAndWait;
 import static javax.swing.SwingUtilities.isEventDispatchThread;
 import static slash.common.helpers.ThreadHelper.invokeInAwtEventQueue;
@@ -76,13 +77,12 @@ public class EclipseSWTMapView extends BaseMapView {
             if (isLinux()) {
                 try {
                     System.setProperty("org.eclipse.swt.browser.UseWebKitGTK", "true");
-                    // System.setProperty("nativeswing.webbrowser.runtime", "webkit");
                     browser = new JWebBrowser(useWebkitRuntime());
                     log.info("Using WebKit runtime to create WebBrowser");
                 } catch (IllegalStateException e) {
                     System.clearProperty("org.eclipse.swt.browser.UseWebKitGTK");
                     browser = new JWebBrowser(useXULRunnerRuntime());
-                    log.info("Using XULRunner runtime to create WebBrowser: " + e.getMessage());
+                    log.info("Using XULRunner runtime to create WebBrowser: " + e);
                 }
             } else {
                 browser = new JWebBrowser();
@@ -124,7 +124,8 @@ public class EclipseSWTMapView extends BaseMapView {
             final String url = html.toURI().toURL().toExternalForm();
             webBrowser.runInSequence(new Runnable() {
                 public void run() {
-                    webBrowser.navigate(url);
+                    boolean navigate = webBrowser.navigate(url);
+                    log.fine(currentTimeMillis() + " navigate " + navigate);
                 }
             });
             log.fine(currentTimeMillis() + " loadWebPage thread " + Thread.currentThread());
@@ -217,7 +218,7 @@ public class EclipseSWTMapView extends BaseMapView {
             log.info("Failed to initialize map since " + (end - start) + " ms, sleeping for " + timeout + " ms");
 
             try {
-                Thread.sleep(timeout);
+                sleep(timeout);
             } catch (InterruptedException e) {
                 // intentionally left empty
             }
@@ -234,7 +235,7 @@ public class EclipseSWTMapView extends BaseMapView {
         checkLocalhostResolution();
         checkCallback();
         setDegreeFormat();
-        setCoordinates();
+        setShowCoordinates();
         end = currentTimeMillis();
         log.fine("Browser interaction is running after " + (end - start) + " ms");
     }
@@ -350,9 +351,9 @@ public class EclipseSWTMapView extends BaseMapView {
                     }
                 });
             } catch (InterruptedException e) {
-                log.severe("Cannot execute script with result: " + e.getMessage());
+                log.severe("Cannot execute script with result: " + e);
             } catch (InvocationTargetException e) {
-                log.severe("Cannot execute script with result: " + e.getMessage());
+                log.severe("Cannot execute script with result: " + e);
             }
         } else {
             webBrowser.runInSequence(new Runnable() {

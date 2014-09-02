@@ -21,21 +21,24 @@
 package slash.navigation.download;
 
 import slash.common.type.CompactCalendar;
-import slash.navigation.download.actions.Validator;
 import slash.navigation.download.queue.QueuePersister;
 
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import java.io.File;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.logging.Logger;
 
 import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
+import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static slash.navigation.download.Action.Extract;
 import static slash.navigation.download.Action.Flatten;
@@ -50,28 +53,39 @@ import static slash.navigation.download.State.*;
 public class DownloadManager {
     private static final Logger log = Logger.getLogger(DownloadManager.class.getName());
     static final int WAIT_TIMEOUT = 15 * 1000;
-    private static final long QUEUE_FILE_SAVE_INTERVAL = 5 * 1000;
     private static final int PARALLEL_DOWNLOAD_COUNT = 4;
+
+    private final File queueFile;
+
+    private final List<DownloadListener> downloadListeners = new CopyOnWriteArrayList<>();
     private final DownloadTableModel model = new DownloadTableModel();
     private final ThreadPoolExecutor pool;
-    private File queueFile;
+    private CompactCalendar lastSync;
 
-    public DownloadManager() {
-        BlockingQueue<Runnable> queue = new PriorityBlockingQueue<Runnable>(1, new DownloadExecutorComparator());
+    public DownloadManager(File queueFile) {
+        this.queueFile = queueFile;
+        BlockingQueue<Runnable> queue = new PriorityBlockingQueue<>(1, new DownloadExecutorComparator());
         pool = new ThreadPoolExecutor(PARALLEL_DOWNLOAD_COUNT, PARALLEL_DOWNLOAD_COUNT * 2, 60, SECONDS, queue);
         pool.allowCoreThreadTimeOut(true);
     }
 
-    public void setQueue(File file) {
-        this.queueFile = file;
+    public void loadQueue() {
         try {
-            List<Download> downloads = new QueuePersister(file).load();
+            log.info(format("Loading download queue from '%s'", queueFile));
+            QueuePersister.Result result = new QueuePersister().load(queueFile);
+            if (result == null)
+                return;
+
+            List<Download> downloads = result.getDownloads();
             if (downloads != null)
                 model.setDownloads(downloads);
+            lastSync = result.getLastSync();
         } catch (Exception e) {
-            log.severe(format("Could not load '%s': %s", file, e.getMessage()));
+            e.printStackTrace();
+            log.severe(format("Could not load download queue from '%s': %s", queueFile, e));
         }
 
+        restartDownloadsWithState(Running);
         restartDownloadsWithState(Resuming);
         restartDownloadsWithState(Downloading);
         restartDownloadsWithState(Processing);
@@ -85,15 +99,19 @@ public class DownloadManager {
         }
     }
 
+    public void setLastSync(CompactCalendar lastSync) {
+        this.lastSync = lastSync;
+    }
+
     public void saveQueue() {
-        if(currentTimeMillis() - queueFile.lastModified() < QUEUE_FILE_SAVE_INTERVAL)
-            return;
         try {
-            new QueuePersister(queueFile).save(model.getDownloads());
+            new QueuePersister().save(queueFile, model.getDownloads(), lastSync);
         } catch (Exception e) {
-            log.severe(format("Could not save %d downloads to '%s': %s", model.getRowCount(), queueFile, e.getMessage()));
+            e.printStackTrace();
+            log.severe(format("Could not save %d download queue to '%s': %s", model.getRowCount(), queueFile, e));
         }
     }
+
     public void dispose() {
         pool.shutdownNow();
     }
@@ -102,44 +120,85 @@ public class DownloadManager {
         return model;
     }
 
+    public void addDownloadListener(DownloadListener listener) {
+        downloadListeners.add(listener);
+    }
+
+    void fireDownloadProgressed(Download download) {
+        int percentage = download.getPercentage();
+        for (DownloadListener listener : downloadListeners) {
+            listener.progressed(download, percentage);
+        }
+    }
+
+    void fireDownloadFailed(Download download) {
+        for (DownloadListener listener : downloadListeners) {
+            listener.failed(download);
+        }
+    }
+
+    void fireDownloadSucceeded(Download download) {
+        for (DownloadListener listener : downloadListeners) {
+            listener.succeeded(download);
+        }
+    }
+
     private void startExecutor(Download download) {
-        DownloadExecutor executor = new DownloadExecutor(download, model);
+        DownloadExecutor executor = new DownloadExecutor(download, this);
         model.addOrUpdateDownload(download);
         pool.execute(executor);
         saveQueue();
     }
 
-    public CompactCalendar getLastSync(String url) {
-        Download queued = getModel().getDownload(url);
-        return queued != null ? queued.getLastSync() : null;
-    }
+    private static final Set<State> RESTART_WHEN_QUEUED_AGAIN = new HashSet<>(asList(NotModified, Succeeded, NoFileError, ChecksumError, Failed));
 
-    public Download queueForDownload(Download download) {
+    private Download queueForDownload(Download download) {
+        if (download.getFile().getFile() == null)
+            throw new IllegalArgumentException("No file given for " + download);
+        if (download.getAction().equals(Extract) || download.getAction().equals(Flatten)) {
+            if (!download.getFile().getFile().isDirectory())
+                throw new IllegalArgumentException(format("Need a directory for extraction but got %s", download.getFile().getFile()));
+
+            List<FileAndChecksum> fragments = download.getFragments();
+            if (fragments == null || fragments.size() == 0)
+                throw new IllegalArgumentException("No fragments given for " + download);
+            for (FileAndChecksum fragmentTarget : fragments) {
+                if (fragmentTarget == null)
+                    throw new IllegalArgumentException("No fragment target given for " + download);
+            }
+        }
+
         Download queued = getModel().getDownload(download.getUrl());
-        if(queued != null) {
-            if(ChecksumError.equals(queued.getState()) ||
-                    SizeError.equals(queued.getState()) ||
-                    TimestampError.equals(queued.getState()) ||
-                    Failed.equals(queued.getState()) ||
-                    !new Validator(download.getTarget()).existsFile())
-                startExecutor(download);
+        if (queued != null) {
+            if (RESTART_WHEN_QUEUED_AGAIN.contains(queued.getState())) // && !new Validator(download).existTargets() && lastSync.before(oneWeekAgo()))
+                startExecutor(queued);
             return queued;
         }
 
-        if((Flatten.equals(download.getAction()) || Extract.equals(download.getAction())) && !download.getTarget().isDirectory())
-            throw new IllegalArgumentException(format("Need a directory for extraction but got %s", download.getTarget()));
         startExecutor(download);
+        fireDownloadProgressed(download);
         return download;
     }
 
-    public Download queueForDownload(String description, String url, Long size, String checksum,
-                                     CompactCalendar timestamp, Action action, File target) {
-        return queueForDownload(new Download(description, url, size, checksum, timestamp, action, target));
+    public Download queueForDownload(String description, String url, Action action, String eTag, FileAndChecksum file,
+                                     List<FileAndChecksum> fragments) {
+        return queueForDownload(new Download(description, url, action, eTag, file, fragments));
     }
 
-    private static final Object LOCK = new Object();
+    private static final Object notificationMutex = new Object();
+
+    private boolean isCompleted(Collection<Download> downloads) {
+        for (Download download : downloads) {
+            if (!(Succeeded.equals(download.getState()) || NotModified.equals(download.getState()) || Failed.equals(download.getState())))
+                return false;
+        }
+        return true;
+    }
 
     public void waitForCompletion(final Collection<Download> downloads) {
+        if (isCompleted(downloads))
+            return;
+
         final boolean[] found = new boolean[1];
         found[0] = false;
         final long[] lastEvent = new long[1];
@@ -147,15 +206,14 @@ public class DownloadManager {
 
         TableModelListener l = new TableModelListener() {
             public void tableChanged(TableModelEvent e) {
-                synchronized (LOCK) {
+                synchronized (notificationMutex) {
                     lastEvent[0] = currentTimeMillis();
 
-                    for (Download download : downloads) {
-                        if (!(Succeeded.equals(download.getState()) || Failed.equals(download.getState())))
-                            return;
-                    }
+                    if (!isCompleted(downloads))
+                        return;
+
                     found[0] = true;
-                    LOCK.notifyAll();
+                    notificationMutex.notifyAll();
                 }
             }
         };
@@ -163,11 +221,11 @@ public class DownloadManager {
         model.addTableModelListener(l);
         try {
             while (true) {
-                synchronized (LOCK) {
+                synchronized (notificationMutex) {
                     if (found[0] || currentTimeMillis() - lastEvent[0] > WAIT_TIMEOUT)
                         break;
                     try {
-                        LOCK.wait(1000);
+                        notificationMutex.wait(1000);
                     } catch (InterruptedException e) {
                         // intentionally left empty
                     }

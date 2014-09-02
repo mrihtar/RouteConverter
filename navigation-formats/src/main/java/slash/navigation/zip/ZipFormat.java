@@ -86,20 +86,20 @@ public class ZipFormat extends BaseNavigationFormat<BaseRoute> {
         try {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
+                NotClosingUnderlyingInputStream buffer = new NotClosingUnderlyingInputStream(new BufferedInputStream(zip));
                 int size = (int) entry.getSize() + 1;
-                NotClosingUnderlyingInputStream buffer = new NotClosingUnderlyingInputStream(new BufferedInputStream(zip, size));
                 buffer.mark(size);
                 List<NavigationFormat> formats = getReadFormatsPreferredByExtension(Files.getExtension(entry.getName()));
-                parserContext.parse(buffer, size, startDate, formats);
+                parserContext.parse(buffer, startDate, formats);
                 zip.closeEntry();
             }
         } catch (IOException e) {
-            log.fine("Error reading invalid zip entry from " + source + ": " + e.getMessage());
+            log.fine("Error reading invalid zip entry from " + source + ": " + e);
         } finally {
             try {
                 zip.close();
             } catch (IOException e) {
-                log.fine("Error closing zip from " + source + ": " + e.getMessage());
+                log.fine("Error closing zip from " + source + ": " + e);
             }
         }
     }

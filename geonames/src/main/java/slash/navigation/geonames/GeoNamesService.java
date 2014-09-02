@@ -60,7 +60,7 @@ public class GeoNamesService implements ElevationService {
     private String execute(String uri) throws IOException {
         String url = getGeoNamesNamesUrl() + uri + "&username=" + getGeoNamesUserName();
         Get get = new Get(url);
-        String result = get.execute();
+        String result = get.executeAsString();
         if (get.isSuccessful()) {
             checkCurrentlyOverloaded(url, result);
             return result;
@@ -76,9 +76,7 @@ public class GeoNamesService implements ElevationService {
                 if (elevation != null && !elevation.equals(nullValue))
                     return elevation;
             } catch (NumberFormatException e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         }
         return null;
@@ -113,9 +111,7 @@ public class GeoNamesService implements ElevationService {
             try {
                 return GeoNamesUtil.unmarshal(result);
             } catch (JAXBException e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         }
         return null;
@@ -195,7 +191,19 @@ public class GeoNamesService implements ElevationService {
         return result.size() > 1 ? new double[]{result.get(0), result.get(1)} : null;
     }
 
+    public boolean isDownload() {
+        return false;
+    }
+
+    public String getPath() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void setPath(String path) {
+        throw new UnsupportedOperationException();
+    }
+
     public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
-        // noop for online services
+        throw new UnsupportedOperationException();
     }
 }

@@ -33,6 +33,13 @@ import java.util.List;
 
 public interface RoutingService {
     String getName();
-    RoutingResult getRouteBetween(NavigationPosition from, NavigationPosition to);
+    boolean isDownload();
+    boolean isSupportTurnpoints();
+    List<TravelMode> getAvailableTravelModes();
+    TravelMode getPreferredTravelMode();
+    String getPath();
+    void setPath(String path);
+
+    RoutingResult getRouteBetween(NavigationPosition from, NavigationPosition to, TravelMode travelMode);
     DownloadFuture downloadRoutingDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes);
 }

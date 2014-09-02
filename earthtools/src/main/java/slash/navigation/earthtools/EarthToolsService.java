@@ -52,7 +52,7 @@ public class EarthToolsService implements ElevationService {
 
     public Double getElevationFor(double longitude, double latitude) throws IOException {
         Get get = new Get(getEarthToolsUrlPreference() + "height/" + latitude + "/" + longitude);
-        String result = get.execute();
+        String result = get.executeAsString();
         if (get.isSuccessful())
             try {
                 Height height = unmarshal(result);
@@ -60,14 +60,24 @@ public class EarthToolsService implements ElevationService {
                 if (elevation != null && !elevation.equals(-9999))
                     return elevation.doubleValue();
             } catch (Exception e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         return null;
     }
 
+    public boolean isDownload() {
+        return false;
+    }
+
+    public String getPath() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void setPath(String path) {
+        throw new UnsupportedOperationException();
+    }
+
     public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
-        // noop for online services
+        throw new UnsupportedOperationException();
     }
 }

@@ -33,6 +33,10 @@ import java.util.List;
 
 public interface ElevationService {
     String getName();
+    boolean isDownload();
+    String getPath();
+    void setPath(String path);
+
     Double getElevationFor(double longitude, double latitude) throws IOException;
     void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes);
 }

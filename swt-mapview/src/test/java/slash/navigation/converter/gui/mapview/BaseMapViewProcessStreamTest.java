@@ -32,7 +32,7 @@ import static org.junit.Assert.assertTrue;
 
 public class BaseMapViewProcessStreamTest {
     private EclipseSWTMapView view = new EclipseSWTMapView();
-    private final Object LOCK = new Object();
+    private final Object notificationMutex = new Object();
 
     private void processStream(final String lines) throws InterruptedException {
         final int[] portCallback = new int[1];
@@ -40,9 +40,9 @@ public class BaseMapViewProcessStreamTest {
 
         view.addMapViewListener(new AbstractMapViewListener() {
             public void receivedCallback(int port) {
-                synchronized (LOCK) {
+                synchronized (notificationMutex) {
                     portCallback[0] = port;
-                    LOCK.notify();
+                    notificationMutex.notify();
                 }
             }
         });
@@ -55,13 +55,13 @@ public class BaseMapViewProcessStreamTest {
                     writer.close();
                     socket.close();
                 } catch (IOException e) {
-                    assertTrue("Cannot write to socket: " + e.getMessage(), false);
+                    assertTrue("Cannot write to socket: " + e, false);
                 }
             }
         }).start();
 
-        synchronized (LOCK) {
-            LOCK.wait(1000);
+        synchronized (notificationMutex) {
+            notificationMutex.wait(1000);
         }
 
         assertEquals(view.getCallbackPort(), portCallback[0]);

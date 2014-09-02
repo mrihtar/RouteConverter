@@ -81,7 +81,7 @@ public class GoogleMapsService implements ElevationService {
     public String getLocationFor(double longitude, double latitude) throws IOException {
         String url = getGeocodingUrl("latlng=" + latitude + "," + longitude);
         Get get = get(url);
-        String result = get.execute();
+        String result = get.executeAsString();
         if (get.isSuccessful())
             try {
                 GeocodeResponse geocodeResponse = unmarshalGeocode(result);
@@ -93,9 +93,7 @@ public class GoogleMapsService implements ElevationService {
                         throw new ServiceUnavailableException("maps.googleapis.com", url);
                 }
             } catch (JAXBException e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         return null;
     }
@@ -123,7 +121,7 @@ public class GoogleMapsService implements ElevationService {
     public List<NavigationPosition> getPositionsFor(String address) throws IOException {
         String url = getGeocodingUrl("address=" + encodeUri(address));
         Get get = get(url);
-        String result = get.execute();
+        String result = get.executeAsString();
         if (get.isSuccessful())
             try {
                 GeocodeResponse geocodeResponse = unmarshalGeocode(result);
@@ -135,9 +133,7 @@ public class GoogleMapsService implements ElevationService {
                         throw new ServiceUnavailableException("maps.googleapis.com", url);
                 }
             } catch (JAXBException e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         return null;
     }
@@ -155,7 +151,7 @@ public class GoogleMapsService implements ElevationService {
     public Double getElevationFor(double longitude, double latitude) throws IOException {
         String url = getElevationUrl("locations=" + latitude + "," + longitude); // TODO could be up to 512 locations
         Get get = get(url);
-        String result = get.execute();
+        String result = get.executeAsString();
         if (get.isSuccessful())
             try {
                 ElevationResponse elevationResponse = GoogleMapsUtil.unmarshalElevation(result);
@@ -169,9 +165,7 @@ public class GoogleMapsService implements ElevationService {
                         throw new ServiceUnavailableException("maps.googleapis.com", url);
                 }
             } catch (JAXBException e) {
-                IOException io = new IOException("Cannot unmarshall " + result + ": " + e.getMessage());
-                io.setStackTrace(e.getStackTrace());
-                throw io;
+                throw new IOException("Cannot unmarshall " + result + ": " + e, e);
             }
         return null;
     }
@@ -184,7 +178,19 @@ public class GoogleMapsService implements ElevationService {
         return results;
     }
 
+    public boolean isDownload() {
+        return false;
+    }
+
+    public String getPath() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void setPath(String path) {
+        throw new UnsupportedOperationException();
+    }
+
     public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
-        // noop for online services
+        throw new UnsupportedOperationException();
     }
 }

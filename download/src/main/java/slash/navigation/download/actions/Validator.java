@@ -20,75 +20,103 @@
 
 package slash.navigation.download.actions;
 
-import slash.common.type.CompactCalendar;
+import slash.navigation.download.Checksum;
+import slash.navigation.download.Download;
+import slash.navigation.download.FileAndChecksum;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.logging.Logger;
 
+import static java.lang.String.format;
 import static java.util.logging.Logger.getLogger;
 import static slash.common.io.Files.generateChecksum;
 import static slash.common.type.CompactCalendar.fromMillis;
 
 /**
- * Validates the properties of a {@link File}.
+ * Validates a {@link Download}
  *
  * @author Christian Pesch
  */
 
 public class Validator {
     private static final Logger log = getLogger(Validator.class.getName());
+    private final Download download;
 
-    private final File file;
-
-    public Validator(File file) {
-        this.file = file;
+    public Validator(Download download) {
+        this.download = download;
     }
 
-    public boolean existsFile() {
-        if (!file.exists()) {
-            log.warning("File " + file + " does not exist");
-            return false;
+    private Checksum createChecksum(File file) throws IOException {
+        return new Checksum(fromMillis(file.lastModified()), file.length(), generateChecksum(file));
+    }
+
+    public void validate() throws IOException {
+        if (!existTargets())
+            return;
+
+        download.getFile().setActualChecksum(createChecksum(getFileTarget()));
+        List<FileAndChecksum> fragments = download.getFragments();
+        if (fragments != null) {
+            for (FileAndChecksum fragment : fragments) {
+                fragment.setActualChecksum(createChecksum(fragment.getFile()));
+            }
         }
+    }
+
+    private File getFileTarget() {
+        File file = download.getFile().getFile();
+        return file.isFile() ? file : download.getTempFile();
+    }
+
+    private boolean isChecksumValid(FileAndChecksum file) throws IOException {
+        Checksum expected = file.getExpectedChecksum();
+        if (expected == null)
+            return true;
+
+        Checksum actual = file.getActualChecksum();
+        boolean lastModifiedEquals = expected.getLastModified() == null ||
+                expected.getLastModified().equals(actual.getLastModified());
+        if (!lastModifiedEquals)
+            log.warning(format("%s has last modified %s but expected %s", file.getFile(), actual.getLastModified(), expected.getLastModified()));
+        boolean contentLengthEquals = expected.getContentLength() == null ||
+                expected.getContentLength().equals(actual.getContentLength());
+        if (!contentLengthEquals)
+            log.warning(format("%s has %d bytes but expected %d", file.getFile(), actual.getContentLength(), expected.getContentLength()));
+        boolean sha1Equals = expected.getSHA1() == null ||
+                expected.getSHA1().equals(actual.getSHA1());
+        if (!sha1Equals)
+            log.warning(format("%s has SHA-1 %s but expected %s", file.getFile(), actual.getSHA1(), expected.getSHA1()));
+        // TODO solve timezone problems first before making lastModifiedEquals relevant again
+        boolean valid = /*lastModifiedEquals &&*/ contentLengthEquals && sha1Equals;
+        if (valid)
+            log.info(format("%s has valid checksum", file.getFile()));
+        return valid;
+    }
+
+    public boolean isChecksumValid() throws IOException {
+        if (!isChecksumValid(download.getFile()))
+            return false;
+
+        List<FileAndChecksum> fragments = download.getFragments();
+        if (fragments != null)
+            for (FileAndChecksum fragment : fragments) {
+                if (!isChecksumValid(fragment))
+                    return false;
+            }
         return true;
     }
 
-    public boolean validSize(Long expectedSize) {
-        if (!existsFile())
+    public boolean existTargets() {
+        if (!download.getFile().getFile().exists())
             return false;
-
-        if (expectedSize != null && file.length() != expectedSize) {
-            log.warning("File " + file + " size is " + file.length() + " but expected " + expectedSize + " bytes");
-            return false;
-        }
-        return true;
-    }
-
-    public boolean validChecksum(String expectedChecksum) throws IOException {
-        if (!existsFile())
-            return false;
-
-        if (expectedChecksum != null) {
-            String actualChecksum = generateChecksum(file);
-            boolean result = actualChecksum.equals(expectedChecksum);
-            if (!result)
-                log.warning("File " + file + " checksum is " + actualChecksum + " but expected " + expectedChecksum);
-            return result;
-        }
-        return true;
-    }
-
-    public boolean validTimestamp(CompactCalendar expectedTimestamp) {
-        if (!existsFile())
-            return false;
-
-        if (expectedTimestamp != null) {
-            CompactCalendar actualTimestamp = fromMillis(file.lastModified());
-            boolean result = actualTimestamp.equals(expectedTimestamp);
-            if (!result)
-                log.warning("File " + file + " timestamp is " + actualTimestamp + " but expected " + expectedTimestamp);
-            return result;
-        }
+        List<FileAndChecksum> fragments = download.getFragments();
+        if (fragments != null)
+            for (FileAndChecksum fragment : fragments) {
+                if (!fragment.getFile().exists())
+                    return false;
+            }
         return true;
     }
 }

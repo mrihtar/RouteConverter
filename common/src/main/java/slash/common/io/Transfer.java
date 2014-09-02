@@ -40,6 +40,8 @@ import static java.lang.Double.POSITIVE_INFINITY;
 import static java.lang.Integer.toHexString;
 import static java.lang.Math.*;
 import static java.util.Calendar.*;
+import static slash.common.type.CompactCalendar.UTC;
+import static slash.common.type.CompactCalendar.fromMillis;
 
 /**
  * Provides value transfer functionality.
@@ -67,11 +69,6 @@ public class Transfer {
         return ceil(number * factor) / factor;
     }
 
-    public static double floorFraction(double number, int fractionCount) {
-        double factor = pow(10, fractionCount);
-        return floor(number * factor) / factor;
-    }
-
     public static double roundMeterToMillimeterPrecision(double number) {
         return floor(number * 10000.0) / 10000.0;
     }
@@ -90,7 +87,7 @@ public class Transfer {
         if (string == null)
             return null;
         string = string.trim();
-        if (string == null || string.length() == 0)
+        if (string.length() == 0)
             return null;
         else
             return string;
@@ -208,14 +205,10 @@ public class Transfer {
     }
 
     public static String formatDuration(long milliseconds) {
-        StringBuilder buffer = new StringBuilder();
         long seconds = milliseconds / 1000;
         long minutes = seconds / 60;
         long hours = minutes / 60;
-        buffer.append(formatIntAsString((int) hours, 2)).append(":").
-                append(formatIntAsString((int) minutes % 60, 2)).append(":").
-                append(formatIntAsString((int) seconds % 60, 2));
-        return buffer.toString();
+        return formatIntAsString((int) hours, 2) + ":" + formatIntAsString((int) minutes % 60, 2) + ":" + formatIntAsString((int) seconds % 60, 2);
     }
 
     public static Integer parseInt(String string) {
@@ -263,7 +256,7 @@ public class Transfer {
             String encoded = URLEncoder.encode(uri, UTF8_ENCODING);
             return encoded.replace("%2F", "/"); // better not .replace("%3A", ":");
         } catch (UnsupportedEncodingException e) {
-            log.severe("Cannot encode uri " + uri + ": " + e.getMessage());
+            log.severe("Cannot encode uri " + uri + ": " + e);
             return uri;
         }
     }
@@ -272,7 +265,7 @@ public class Transfer {
         try {
             return URLDecoder.decode(uri, UTF8_ENCODING);
         } catch (UnsupportedEncodingException e) {
-            log.severe("Cannot decode uri " + uri + ": " + e.getMessage());
+            log.severe("Cannot decode uri " + uri + ": " + e);
             return uri;
         }
     }
@@ -301,7 +294,7 @@ public class Transfer {
             byte[] bytes = string.getBytes(UTF8_ENCODING);
             return new String(bytes);
         } catch (UnsupportedEncodingException e) {
-            log.severe("Cannot encode " + string + " as " + UTF8_ENCODING + ": " + e.getMessage());
+            log.severe("Cannot encode " + string + " as " + UTF8_ENCODING + ": " + e);
             return string;
         }
     }
@@ -309,8 +302,8 @@ public class Transfer {
     public static CompactCalendar parseTime(XMLGregorianCalendar calendar) {
         if (calendar == null)
             return null;
-        GregorianCalendar gregorianCalendar = calendar.toGregorianCalendar(CompactCalendar.UTC, null, null);
-        return CompactCalendar.fromMillis(gregorianCalendar.getTimeInMillis());
+        GregorianCalendar gregorianCalendar = calendar.toGregorianCalendar(UTC, null, null);
+        return fromMillis(gregorianCalendar.getTimeInMillis());
     }
 
     private static DatatypeFactory datatypeFactory = null;
@@ -326,17 +319,11 @@ public class Transfer {
        return formatTime(time, preferences.getBoolean("reduceTimeToSecondPrecision", false));
     }
 
-    @SuppressWarnings("MagicConstant")
     public static XMLGregorianCalendar formatTime(CompactCalendar time, boolean reduceTimeToSecondPrecision) {
         if (time == null)
             return null;
         try {
-            GregorianCalendar gregorianCalendar = new GregorianCalendar(CompactCalendar.UTC, Locale.getDefault());
-            gregorianCalendar.clear();
-            Calendar calendar = time.getCalendar();
-            gregorianCalendar.set(calendar.get(YEAR), calendar.get(MONTH), calendar.get(DATE),
-                    calendar.get(HOUR_OF_DAY), calendar.get(MINUTE), calendar.get(SECOND));
-            gregorianCalendar.set(MILLISECOND, calendar.get(MILLISECOND));
+            GregorianCalendar gregorianCalendar = toUTC(time.getCalendar());
             XMLGregorianCalendar result = getDataTypeFactory().newXMLGregorianCalendar(gregorianCalendar);
             if (reduceTimeToSecondPrecision)
                 result.setFractionalSecond(null);
@@ -344,5 +331,15 @@ public class Transfer {
         } catch (DatatypeConfigurationException e) {
             return null;
         }
+    }
+
+    @SuppressWarnings("MagicConstant")
+    private static GregorianCalendar toUTC(Calendar calendar) {
+        GregorianCalendar gregorianCalendar = new GregorianCalendar(UTC, Locale.getDefault());
+        gregorianCalendar.clear();
+        gregorianCalendar.set(calendar.get(YEAR), calendar.get(MONTH), calendar.get(DATE),
+                calendar.get(HOUR_OF_DAY), calendar.get(MINUTE), calendar.get(SECOND));
+        gregorianCalendar.set(MILLISECOND, calendar.get(MILLISECOND));
+        return gregorianCalendar;
     }
 }

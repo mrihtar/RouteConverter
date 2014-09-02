@@ -19,13 +19,16 @@
 */
 package slash.navigation.download.tools;
 
-import slash.navigation.download.datasources.binding.FileType;
-import slash.navigation.download.datasources.binding.FragmentType;
-import slash.navigation.download.datasources.binding.ObjectFactory;
+import slash.navigation.datasources.binding.FileType;
+import slash.navigation.datasources.binding.FragmentType;
+import slash.navigation.datasources.binding.MapType;
+import slash.navigation.datasources.binding.ThemeType;
+import slash.navigation.download.tools.base.FileDataSourcesXmlGenerator;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -34,17 +37,14 @@ import java.util.zip.ZipInputStream;
 
 import static java.util.regex.Pattern.CASE_INSENSITIVE;
 import static org.apache.commons.io.IOUtils.closeQuietly;
-import static slash.common.io.Files.generateChecksum;
-import static slash.common.io.Transfer.formatTime;
-import static slash.common.type.CompactCalendar.fromMillis;
 
 /**
- * Creates a HGT data sources XML from file system mirror.
+ * Creates a HGT data sources XML from a file system mirror.
  *
  * @author Christian Pesch
  */
 
-public class CreateHgtDataSourcesXml extends BaseDataSourcesXmlGenerator {
+public class CreateHgtDataSourcesXml extends FileDataSourcesXmlGenerator {
     private static final Pattern KEY_PATTERN = Pattern.compile(".*([N|S]\\d{2}[E|W]\\d{3}).*", CASE_INSENSITIVE);
 
     private String extractKey(String string) {
@@ -56,9 +56,9 @@ public class CreateHgtDataSourcesXml extends BaseDataSourcesXmlGenerator {
         return matcher.group(1).toUpperCase();
     }
 
-    protected void parseFile(File file, List<FragmentType> fragmentTypes, List<FileType> fileTypes, File baseDirectory) throws IOException {
+    protected void parseFile(File file, List<FileType> fileTypes, List<MapType> mapTypes, List<ThemeType> themeTypes, File baseDirectory) throws IOException {
         String uri = relativizeUri(file, baseDirectory);
-        fileTypes.add(createFileType(uri, file));
+        List<FragmentType> fragmentTypes = new ArrayList<>();
 
         ZipInputStream zipInputStream = null;
         try {
@@ -69,16 +69,7 @@ public class CreateHgtDataSourcesXml extends BaseDataSourcesXmlGenerator {
                     String key = extractKey(entry.getName());
                     if (key != null) {
                         System.out.println(getClass().getSimpleName() + ": " + key + " maps to " + uri);
-
-                        String checksum = generateChecksum(zipInputStream);
-
-                        FragmentType fragmentType = new ObjectFactory().createFragmentType();
-                        fragmentType.setKey(key);
-                        fragmentType.setUri(uri);
-                        fragmentType.setSize(entry.getSize());
-                        fragmentType.setChecksum(checksum);
-                        fragmentType.setTimestamp(formatTime(fromMillis(entry.getTime()), true));
-                        fragmentTypes.add(fragmentType);
+                        fragmentTypes.add(createFragmentType(key, entry, zipInputStream));
 
                         // do not close zip input stream
                         zipInputStream.closeEntry();
@@ -90,6 +81,10 @@ public class CreateHgtDataSourcesXml extends BaseDataSourcesXmlGenerator {
             if (zipInputStream != null)
                 closeQuietly(zipInputStream);
         }
+
+        FileType fileType = createFileType(uri, file, null);
+        fileType.getFragment().addAll(sortFragmentTypes(fragmentTypes));
+        fileTypes.add(fileType);
     }
 
     public static void main(String[] args) throws Exception {

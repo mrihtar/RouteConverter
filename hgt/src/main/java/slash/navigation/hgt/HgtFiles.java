@@ -19,13 +19,13 @@
 */
 package slash.navigation.hgt;
 
-import slash.common.type.CompactCalendar;
 import slash.navigation.common.LongitudeAndLatitude;
+import slash.navigation.datasources.DataSource;
+import slash.navigation.datasources.File;
+import slash.navigation.datasources.Fragment;
 import slash.navigation.download.Download;
 import slash.navigation.download.DownloadManager;
-import slash.navigation.download.actions.Validator;
-import slash.navigation.download.datasources.File;
-import slash.navigation.download.datasources.Fragment;
+import slash.navigation.download.FileAndChecksum;
 import slash.navigation.elevation.ElevationService;
 
 import java.io.IOException;
@@ -36,7 +36,7 @@ import java.util.prefs.Preferences;
 import static java.lang.String.format;
 import static slash.common.io.Directories.ensureDirectory;
 import static slash.common.io.Directories.getApplicationDirectory;
-import static slash.navigation.download.Action.Extract;
+import static slash.navigation.download.Action.Flatten;
 
 /**
  * Encapsulates access to HGT files.
@@ -49,33 +49,40 @@ public class HgtFiles implements ElevationService {
     private static final String DIRECTORY_PREFERENCE = "directory";
     private static final String BASE_URL_PREFERENCE = "baseUrl";
 
-    private final Map<java.io.File, RandomAccessFile> randomAccessFileCache = new HashMap<java.io.File, RandomAccessFile>();
-    private final String name, baseUrl, directory;
-    private final Map<String, Fragment> archiveMap;
-    private final Map<String, File> fileMap;
+    private final Map<java.io.File, RandomAccessFile> randomAccessFileCache = new HashMap<>();
+    private final DataSource dataSource;
     private final DownloadManager downloadManager;
 
-    public HgtFiles(String name, String baseUrl, String directory,
-                    Map<String, Fragment> archiveMap, Map<String, File> fileMap,
-                    DownloadManager downloadManager) {
-        this.name = name;
-        this.baseUrl = baseUrl;
-        this.directory = directory;
-        this.archiveMap = archiveMap;
-        this.fileMap = fileMap;
+    public HgtFiles(DataSource dataSource, DownloadManager downloadManager) {
+        this.dataSource = dataSource;
         this.downloadManager = downloadManager;
     }
 
     public String getName() {
-        return name;
+        return dataSource.getName();
     }
 
     String getBaseUrl() {
-        return preferences.get(BASE_URL_PREFERENCE + getName(), baseUrl);
+        return preferences.get(BASE_URL_PREFERENCE + getName(), dataSource.getBaseUrl());
+    }
+
+    public boolean isDownload() {
+        return true;
+    }
+
+    public String getPath() {
+        return preferences.get(DIRECTORY_PREFERENCE + getName(), "");
+    }
+
+    public void setPath(String path) {
+        preferences.put(DIRECTORY_PREFERENCE + getName(), path);
     }
 
     private java.io.File getDirectory() {
-        String directoryName = preferences.get(DIRECTORY_PREFERENCE, getApplicationDirectory(directory).getAbsolutePath());
+        String directoryName = getPath();
+        java.io.File f = new java.io.File(directoryName);
+        if (!f.exists())
+            directoryName = getApplicationDirectory(dataSource.getDirectory()).getAbsolutePath();
         return ensureDirectory(directoryName);
     }
 
@@ -89,7 +96,7 @@ public class HgtFiles implements ElevationService {
     }
 
     private java.io.File createFile(String key) {
-        return new java.io.File(getDirectory(), format("%s%s", key, ".hgt"));
+        return new java.io.File(getDirectory(), key + ".hgt");
     }
 
     public Double getElevationFor(double longitude, double latitude) throws IOException {
@@ -115,32 +122,22 @@ public class HgtFiles implements ElevationService {
         randomAccessFileCache.clear();
     }
 
-    private static class FragmentAndTarget {
-        public final Fragment fragment;
-        public final java.io.File target;
-
-        private FragmentAndTarget(Fragment fragment, java.io.File target) {
-            this.fragment = fragment;
-            this.target = target;
-        }
-    }
-
     public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
-        Set<String> keys = new HashSet<String>();
+        Set<String> keys = new HashSet<>();
         for (LongitudeAndLatitude longitudeAndLatitude : longitudeAndLatitudes) {
             keys.add(createFileKey(longitudeAndLatitude.longitude, longitudeAndLatitude.latitude));
         }
 
-        Set<FragmentAndTarget> fragments = new HashSet<FragmentAndTarget>();
+        Set<Fragment> fragments = new HashSet<>();
         for (String key : keys) {
-            Fragment fragment = archiveMap.get(key);
+            Fragment fragment = dataSource.getFragment(key);
             if (fragment != null)
-                fragments.add(new FragmentAndTarget(fragment, createFile(key)));
+                fragments.add(fragment);
         }
 
-        Collection<Download> downloads = new HashSet<Download>();
-        for (FragmentAndTarget fragment : fragments) {
-            if (new Validator(fragment.target).existsFile())
+        Collection<Download> downloads = new HashSet<>();
+        for (Fragment<File> fragment : fragments) {
+            if (createFile(fragment.getKey()).exists())
                 continue;
             downloads.add(download(fragment));
         }
@@ -149,14 +146,16 @@ public class HgtFiles implements ElevationService {
             downloadManager.waitForCompletion(downloads);
     }
 
-    private Download download(FragmentAndTarget fragment) {
-        String uri = fragment.fragment.getUri();
+    private Download download(Fragment<File> fragment) {
+        File downloadable = fragment.getDownloadable();
+
+        List<FileAndChecksum> fragments = new ArrayList<>();
+        for (Fragment otherFragments : downloadable.getFragments())
+            fragments.add(new FileAndChecksum(createFile(otherFragments.getKey()), otherFragments.getLatestChecksum()));
+
+        String uri = downloadable.getUri();
         String url = getBaseUrl() + uri;
-        File file = fileMap.get(uri);
-        Long fileSize = file != null ? file.getSize() : null;
-        CompactCalendar fileTimestamp = file != null ? file.getTimestamp() : null;
-        String fileChecksum = file != null ? file.getChecksum() : null;
-        return downloadManager.queueForDownload(getName() + " elevation data for " + uri, url,
-                fileSize, fileChecksum, fileTimestamp, Extract, getDirectory());
+        return downloadManager.queueForDownload(getName() + ": Elevation Data " + uri, url, Flatten,
+                null, new FileAndChecksum(getDirectory(), downloadable.getLatestChecksum()), fragments);
     }
 }

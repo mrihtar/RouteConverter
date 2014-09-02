@@ -25,13 +25,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static java.lang.Integer.MAX_VALUE;
+import static java.lang.String.format;
+import static java.util.logging.Logger.getLogger;
 import static org.apache.commons.io.IOUtils.closeQuietly;
 import static slash.common.io.Directories.ensureDirectory;
 import static slash.common.io.Files.lastPathFragment;
+import static slash.common.io.Files.setLastModified;
+import static slash.common.type.CompactCalendar.fromMillis;
 
 /**
  * Extracts a {@link Download} to a target directory.
@@ -39,6 +44,7 @@ import static slash.common.io.Files.lastPathFragment;
  * @author Christian Pesch
  */
 public class Extractor {
+    private static final Logger log = getLogger(Extractor.class.getName());
     private final CopierListener listener;
 
     public Extractor(CopierListener listener) {
@@ -61,17 +67,15 @@ public class Extractor {
                         extracted = new File(destination, lastPathFragment(entry.getName(), MAX_VALUE));
                     else {
                         extracted = new File(destination, entry.getName());
-                        ensureDirectory(extracted.getParent());
                     }
+                    ensureDirectory(extracted.getParent());
+
+                    log.info(format("Extracting from %s to %s", tempFile, extracted));
                     FileOutputStream output = new FileOutputStream(extracted);
-
                     new Copier(listener).copy(zipInputStream, output, 0, entry.getSize());
-
                     // do not close zip input stream
                     closeQuietly(output);
-
-                    if(!extracted.setLastModified(entry.getTime()))
-                        throw new IOException("Could not set last modified of " + extracted);
+                    setLastModified(extracted, fromMillis(entry.getTime()));
 
                     zipInputStream.closeEntry();
                 }
