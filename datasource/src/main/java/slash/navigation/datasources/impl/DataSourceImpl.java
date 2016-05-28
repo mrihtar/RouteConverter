@@ -24,6 +24,7 @@ import slash.navigation.datasources.binding.DatasourceType;
 import slash.navigation.datasources.binding.FileType;
 import slash.navigation.datasources.binding.MapType;
 import slash.navigation.datasources.binding.ThemeType;
+import slash.navigation.download.Checksum;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +40,7 @@ public class DataSourceImpl implements DataSource {
     private final DatasourceType datasourceType;
     private boolean initialized = false;
     private final java.util.Map<String, Downloadable> downloadableMap = new HashMap<>();
-    private final java.util.Map<String, Fragment> fragmentMap = new HashMap<>();
+    private final java.util.Map<String, Fragment<Downloadable>> fragmentMap = new HashMap<>();
 
     public DataSourceImpl(DatasourceType datasourceType) {
         this.datasourceType = datasourceType;
@@ -49,7 +50,7 @@ public class DataSourceImpl implements DataSource {
         for (Downloadable downloadable : downloadables) {
             downloadableMap.put(downloadable.getUri(), downloadable);
 
-            for (Fragment fragment : downloadable.getFragments())
+            for (Fragment<Downloadable> fragment : downloadable.getFragments())
                 fragmentMap.put(fragment.getKey(), fragment);
         }
     }
@@ -76,8 +77,16 @@ public class DataSourceImpl implements DataSource {
         return datasourceType.getBaseUrl();
     }
 
+    public String getHref() {
+        return datasourceType.getHref();
+    }
+
     public String getDirectory() {
         return datasourceType.getDirectory();
+    }
+
+    public String getAction() {
+        return datasourceType.getAction().value();
     }
 
     public List<File> getFiles() {
@@ -106,9 +115,29 @@ public class DataSourceImpl implements DataSource {
         return downloadableMap.get(uri);
     }
 
-    public Fragment getFragment(String key) {
+    public Fragment<Downloadable> getFragment(String key) {
         initialize();
         return fragmentMap.get(key);
+    }
+
+    public Downloadable getDownloadableBySHA1(String sha1) {
+        initialize();
+        for(Downloadable downloadable : downloadableMap.values()) {
+            Checksum checksum = downloadable.getLatestChecksum();
+            if(checksum != null && sha1.equals(checksum.getSHA1()))
+                return downloadable;
+        }
+        return null;
+    }
+
+    public Fragment<Downloadable> getFragmentBySHA1(String sha1) {
+        initialize();
+        for(Fragment<Downloadable> fragment : fragmentMap.values()) {
+            Checksum checksum = fragment.getLatestChecksum();
+            if(checksum != null && sha1.equals(checksum.getSHA1()))
+                return fragment;
+        }
+        return null;
     }
 
     public boolean equals(Object o) {
@@ -117,16 +146,16 @@ public class DataSourceImpl implements DataSource {
 
         DataSource dataSource = (DataSource) o;
 
-        return getBaseUrl().equals(dataSource.getBaseUrl());
+        return getId().equals(dataSource.getId());
     }
 
     public int hashCode() {
         int result;
-        result = getBaseUrl().hashCode();
+        result = getId().hashCode();
         return result;
     }
 
     public String toString() {
-        return getClass().getSimpleName() + "[baseUrl=" + getBaseUrl() + "]";
+        return getClass().getSimpleName() + "[id=" + getId() + "]";
     }
 }

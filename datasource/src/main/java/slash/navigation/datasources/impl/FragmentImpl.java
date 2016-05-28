@@ -19,16 +19,16 @@
 */
 package slash.navigation.datasources.impl;
 
-import slash.navigation.download.Checksum;
 import slash.navigation.datasources.Downloadable;
 import slash.navigation.datasources.Fragment;
 import slash.navigation.datasources.binding.ChecksumType;
 import slash.navigation.datasources.binding.FragmentType;
+import slash.navigation.download.Checksum;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static slash.navigation.datasources.DataSourcesUtil.asChecksum;
+import static slash.navigation.datasources.helpers.DataSourcesUtil.asChecksum;
 
 /**
  * Implementation of a {@link Fragment} based on a {@link FragmentType}.
@@ -54,7 +54,7 @@ public class FragmentImpl<T extends Downloadable> implements Fragment {
     }
 
     public List<Checksum> getChecksums() {
-        List<Checksum> result = new ArrayList<Checksum>();
+        List<Checksum> result = new ArrayList<>();
         for (ChecksumType checksumType : fragmentType.getChecksum())
             result.add(asChecksum(checksumType));
         return result;

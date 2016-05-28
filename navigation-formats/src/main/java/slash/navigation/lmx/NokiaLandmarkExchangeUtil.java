@@ -20,21 +20,20 @@
 
 package slash.navigation.lmx;
 
-import static slash.common.helpers.JAXBHelper.newContext;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import slash.common.helpers.JAXBHelper;
+import slash.navigation.lmx.binding.Lmx;
+import slash.navigation.lmx.binding.ObjectFactory;
 
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
-import slash.common.helpers.JAXBHelper;
-import slash.navigation.lmx.binding.Lmx;
-import slash.navigation.lmx.binding.ObjectFactory;
+import static slash.common.helpers.JAXBHelper.newContext;
 
 public class NokiaLandmarkExchangeUtil {
     public static final String LMX_NAMESPACE_URI = "http://www.nokia.com/schemas/location/landmarks/1/0";
@@ -62,7 +61,7 @@ public class NokiaLandmarkExchangeUtil {
     public static void marshal(Lmx lmx, OutputStream out) throws JAXBException {
         try {
             try {
-                newMarshaller().marshal(new JAXBElement<Lmx>(new QName(LMX_NAMESPACE_URI, "lmx"), Lmx.class, lmx), out);
+                newMarshaller().marshal(new JAXBElement<>(new QName(LMX_NAMESPACE_URI, "lmx"), Lmx.class, lmx), out);
             }
             finally {
                 out.flush();

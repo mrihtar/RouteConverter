@@ -23,6 +23,7 @@ import slash.navigation.base.BaseNavigationPosition;
 import slash.navigation.common.LongitudeAndLatitude;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.RouteConverter;
+import slash.navigation.converter.gui.models.PositionsModel;
 import slash.navigation.routing.RoutingResult;
 import slash.navigation.routing.RoutingService;
 import slash.navigation.routing.TravelMode;
@@ -39,38 +40,40 @@ import java.util.List;
 public class InsertPositionFacade {
     public void insertAllWaypoints() {
         RouteConverter r = RouteConverter.getInstance();
-        int[] selectedRows = r.getPositionsView().getSelectedRows();
+        int[] selectedRows = r.getConvertPanel().getPositionsView().getSelectedRows();
         r.clearSelection();
 
-        RoutingService routingService = r.getRoutingServiceFacade().getRoutingService();
-        if (routingService instanceof GoogleDirections && r.isMapViewInitialized()) {
-            ((GoogleDirections) routingService).insertAllWaypoints(selectedRows);
+        RoutingService service = r.getRoutingServiceFacade().getRoutingService();
+        if (service instanceof GoogleDirectionsService) {
+            ((GoogleDirectionsService)service).insertAllWaypoints(selectedRows);
         } else
-            insertWithRoutingService(routingService, selectedRows);
+            insertWithRoutingService(service, selectedRows);
     }
 
     public void insertOnlyTurnpoints() {
         RouteConverter r = RouteConverter.getInstance();
-        int[] selectedRows = r.getPositionsView().getSelectedRows();
+        int[] selectedRows = r.getConvertPanel().getPositionsView().getSelectedRows();
         r.clearSelection();
 
-        RoutingService routingService = r.getRoutingServiceFacade().getRoutingService();
-        if (routingService instanceof GoogleDirections && r.isMapViewInitialized()) {
-            ((GoogleDirections) routingService).insertOnlyTurnpoints(selectedRows);
+        RoutingService service = r.getRoutingServiceFacade().getRoutingService();
+        if (service instanceof GoogleDirectionsService) {
+            ((GoogleDirectionsService)service).insertOnlyTurnpoints(selectedRows);
         } else
             throw new UnsupportedOperationException();
     }
 
     private void insertWithRoutingService(RoutingService routingService, int[] selectedRows) {
         RouteConverter r = RouteConverter.getInstance();
-        List<NavigationPosition> selectedPositions = new ArrayList<NavigationPosition>();
+        PositionsModel positionsModel = r.getConvertPanel().getPositionsModel();
+
+        List<NavigationPosition> selectedPositions = new ArrayList<>();
         for (int i = 0; i < selectedRows.length; i++)
-            selectedPositions.add(r.getPositionsModel().getPosition(i));
+            selectedPositions.add(positionsModel.getPosition(i));
 
         if (routingService.isDownload()) {
-            List<LongitudeAndLatitude> lal = new ArrayList<LongitudeAndLatitude>();
+            List<LongitudeAndLatitude> lal = new ArrayList<>();
             for (NavigationPosition position : selectedPositions) {
-                lal.add(asLongitudeAndLatitude(position));
+                lal.add(new LongitudeAndLatitude(position.getLongitude(), position.getLatitude()));
             }
             routingService.downloadRoutingDataFor(lal);
         }
@@ -78,27 +81,23 @@ public class InsertPositionFacade {
         TravelMode travelMode = r.getRoutingServiceFacade().getTravelMode();
         for (int i = 0; i < selectedPositions.size(); i++) {
             // skip the very last position without successor
-            if (i == r.getPositionsModel().getRowCount() - 1 || i == selectedPositions.size() - 1)
+            if (i == positionsModel.getRowCount() - 1 || i == selectedPositions.size() - 1)
                 continue;
 
             RoutingResult result = routingService.getRouteBetween(selectedPositions.get(i), selectedPositions.get(i + 1), travelMode);
-            if (result != null) {
-                List<BaseNavigationPosition> positions = new ArrayList<BaseNavigationPosition>();
+            if (result.isValid()) {
+                List<BaseNavigationPosition> positions = new ArrayList<>();
                 for (NavigationPosition position : result.getPositions()) {
-                    positions.add(r.getPositionsModel().getRoute().createPosition(position.getLongitude(), position.getLatitude(), position.getElevation(), null, null, null));
+                    positions.add(r.getConvertPanel().getPositionsModel().getRoute().createPosition(position.getLongitude(), position.getLatitude(), position.getElevation(), null, null, null));
                 }
-                int insertRow = r.getPositionsModel().getIndex(selectedPositions.get(i)) + 1;
-                r.getPositionsModel().add(insertRow, positions);
+                int insertRow = r.getConvertPanel().getPositionsModel().getIndex(selectedPositions.get(i)) + 1;
+                r.getConvertPanel().getPositionsModel().add(insertRow, positions);
 
                 for (int j = 0; j < positions.size(); j++) {
                     int[] rows = new int[]{insertRow + j};
-                    r.getBatchPositionAugmenter().addData(rows, false, true, true);
+                    r.getPositionAugmenter().addData(rows, false, true, true, false, false);
                 }
             }
         }
-    }
-
-    private LongitudeAndLatitude asLongitudeAndLatitude(NavigationPosition position) {
-        return new LongitudeAndLatitude(position.getLongitude(), position.getLatitude());
     }
 }

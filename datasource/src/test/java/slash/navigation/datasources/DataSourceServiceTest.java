@@ -21,11 +21,13 @@ package slash.navigation.datasources;
 
 import org.junit.Before;
 import org.junit.Test;
+import slash.navigation.datasources.helpers.DataSourceService;
 
 import java.io.IOException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class DataSourceServiceTest {
     private DataSourceService service;
@@ -43,8 +45,8 @@ public class DataSourceServiceTest {
         assertEquals(directory, dataSource.getDirectory());
     }
 
-    private Fragment getFragment(List<Fragment> fragments, String key) {
-        for (Fragment fragment : fragments) {
+    private Fragment<Downloadable> getFragment(List<Fragment<Downloadable>> fragments, String key) {
+        for (Fragment<Downloadable> fragment : fragments) {
             if (fragment.getKey().equals(key))
                 return fragment;
         }
@@ -52,11 +54,13 @@ public class DataSourceServiceTest {
     }
 
 
-    private void checkFragments(List<Fragment> fragments, String... keyValues) {
+    private void checkFragments(List<Fragment<Downloadable>> fragments, String... keyValues) {
         for (int i = 0; i < keyValues.length; i += 2) {
             String key = keyValues[i];
             String value = keyValues[i + 1];
-            assertEquals(value, getFragment(fragments, key).getKey());
+            Fragment<Downloadable> fragment = getFragment(fragments, key);
+            assertNotNull(fragment);
+            assertEquals(value, fragment.getKey());
         }
     }
 
@@ -72,7 +76,9 @@ public class DataSourceServiceTest {
         for (int i = 0; i < keyValues.length; i += 2) {
             String key = keyValues[i];
             String value = keyValues[i + 1];
-            assertEquals(value, getFile(files, key).getLatestChecksum().getSHA1());
+            File file = getFile(files, key);
+            assertNotNull(file);
+            assertEquals(value, file.getLatestChecksum().getSHA1());
         }
     }
 
@@ -89,9 +95,15 @@ public class DataSourceServiceTest {
         checkDatasourceType(service.getDataSourceByUrlPrefix(baseUrl2), "id2", "name2", baseUrl2, "dir2/dir3");
         checkDatasourceType(dataSources.get(2), "id3", "name3", baseUrl3, "dir4");
 
-        checkFragments(getFile(service.getDataSourceByUrlPrefix(baseUrl1).getFiles(), "x/y/z.data").getFragments(), "a", "a");
-        checkFragments(getFile(service.getDataSourceByUrlPrefix(baseUrl2).getFiles(), "x/y/z.data").getFragments(), "b", "b");
-        checkFragments(getFile(service.getDataSourceByUrlPrefix(baseUrl2).getFiles(), "z/y/x.data").getFragments(), "c", "c");
+        File file1 = getFile(service.getDataSourceByUrlPrefix(baseUrl1).getFiles(), "x/y/z.data");
+        assertNotNull(file1);
+        checkFragments(file1.getFragments(), "a", "a");
+        File file2 = getFile(service.getDataSourceByUrlPrefix(baseUrl2).getFiles(), "x/y/z.data");
+        assertNotNull(file2);
+        checkFragments(file2.getFragments(), "b", "b");
+        File file3 = getFile(service.getDataSourceByUrlPrefix(baseUrl2).getFiles(), "z/y/x.data");
+        assertNotNull(file3);
+        checkFragments(file3.getFragments(), "c", "c");
 
         checkFiles(service.getDataSourceByUrlPrefix(baseUrl1).getFiles(), "x/y/z.data", "x");
         checkFiles(service.getDataSourceByUrlPrefix(baseUrl3).getFiles());

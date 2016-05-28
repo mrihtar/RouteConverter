@@ -19,7 +19,9 @@
 */
 package slash.navigation.datasources.impl;
 
-import slash.navigation.datasources.*;
+import slash.navigation.datasources.DataSource;
+import slash.navigation.datasources.Downloadable;
+import slash.navigation.datasources.Fragment;
 import slash.navigation.datasources.binding.ChecksumType;
 import slash.navigation.datasources.binding.DownloadableType;
 import slash.navigation.datasources.binding.FragmentType;
@@ -28,7 +30,7 @@ import slash.navigation.download.Checksum;
 import java.util.ArrayList;
 import java.util.List;
 
-import static slash.navigation.datasources.DataSourcesUtil.asChecksum;
+import static slash.navigation.datasources.helpers.DataSourcesUtil.asChecksum;
 
 /**
  * Implementation of a {@link Downloadable} based on a {@link DownloadableType}.
@@ -58,18 +60,21 @@ public class DownloadableImpl implements Downloadable {
     }
 
     public List<Checksum> getChecksums() {
-        List<Checksum> result = new ArrayList<Checksum>();
+        List<Checksum> result = new ArrayList<>();
         if (downloadableType != null)
             for (ChecksumType checksumType : downloadableType.getChecksum())
                 result.add(asChecksum(checksumType));
         return result;
     }
 
-    public List<Fragment> getFragments() {
-        List<Fragment> result = new ArrayList<Fragment>();
-        if (downloadableType != null)
-            for (FragmentType fragmentType : downloadableType.getFragment())
-                result.add(new FragmentImpl(fragmentType, this));
+    @SuppressWarnings("unchecked")
+    public List<Fragment<Downloadable>> getFragments() {
+        List<Fragment<Downloadable>> result = new ArrayList<>();
+        if (downloadableType != null) {
+            for (FragmentType fragmentType : downloadableType.getFragment()) {
+                result.add(new FragmentImpl<Downloadable>(fragmentType, this));
+            }
+        }
         return result;
     }
 

@@ -28,6 +28,7 @@ import javax.help.HelpBroker;
 import javax.help.HelpSet;
 import javax.help.HelpSetException;
 import javax.swing.*;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ResourceBundle;
 
@@ -43,9 +44,8 @@ public class ApplicationContext {
     private UndoManager undoManager = new UndoManager();
     private NotificationManager notificationManager = new NotificationManager();
     private JMenuBar menuBar = null;
-    private String helpBrokerUrl = null;
-    private ClassLoader helpBrokerClassLoader = null;
     private HelpBroker broker = null;
+    private String helpBrokerUrl = null;
 
     public ResourceBundle getBundle() {
         return bundle;
@@ -75,20 +75,15 @@ public class ApplicationContext {
         this.menuBar = menuBar;
     }
 
-    public HelpBroker getHelpBroker() throws HelpSetException {
-        if (broker == null) {
-            URL url = HelpSet.findHelpSet(helpBrokerClassLoader, helpBrokerUrl);
-            HelpSet helpSet = new HelpSet(helpBrokerClassLoader, url);
-            broker = helpSet.createHelpBroker();
-        }
-        return broker;
-    }
-
     public void setHelpBrokerUrl(String helpBrokerUrl) {
         this.helpBrokerUrl = helpBrokerUrl;
     }
 
-    public void setHelpBrokerClassLoader(ClassLoader helpBrokerClassLoader) {
-        this.helpBrokerClassLoader = helpBrokerClassLoader;
+    public HelpBroker getHelpBroker() throws HelpSetException, MalformedURLException {
+        if (broker == null) {
+            HelpSet helpSet = new HelpSet(Application.class.getClassLoader(), new URL(helpBrokerUrl));
+            broker = helpSet.createHelpBroker();
+        }
+        return broker;
     }
 }

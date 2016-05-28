@@ -24,6 +24,7 @@ import slash.navigation.base.BaseNavigationPosition;
 import slash.navigation.common.BoundingBox;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.RouteConverter;
+import slash.navigation.converter.gui.helpers.PositionAugmenter;
 import slash.navigation.converter.gui.models.PositionsModel;
 import slash.navigation.converter.gui.models.PositionsSelectionModel;
 import slash.navigation.gui.actions.FrameAction;
@@ -68,26 +69,27 @@ public class AddPositionAction extends FrameAction {
         return new BoundingBox(asList(second, position)).getCenter();
     }
 
+    private PositionAugmenter getBatchPositionAugmenter() {
+        return RouteConverter.getInstance().getPositionAugmenter();
+    }
+
     private NavigationPosition insertRow(int row, NavigationPosition position) {
-        String description = RouteConverter.getInstance().getBatchPositionAugmenter().createDescription(positionsModel.getRowCount() + 1, null);
+        String description = getBatchPositionAugmenter().createDescription(positionsModel.getRowCount() + 1, null);
         positionsModel.add(row, position.getLongitude(), position.getLatitude(), position.getElevation(),
                 position.getSpeed(), position.getTime(), description);
         return positionsModel.getPosition(row);
     }
 
     private void complementRow(int row) {
-        RouteConverter r = RouteConverter.getInstance();
-        r.getBatchPositionAugmenter().addData(new int[]{row}, true, true, true);
+        getBatchPositionAugmenter().addData(new int[]{row}, true, true, true, true, false);
     }
 
     public void run() {
-        RouteConverter r = RouteConverter.getInstance();
-
         boolean hasInsertedRowInMapCenter = false;
-        List<NavigationPosition> insertedPositions = new ArrayList<NavigationPosition>();
+        List<NavigationPosition> insertedPositions = new ArrayList<>();
         int[] rowIndices = revert(table.getSelectedRows());
         // append to table if there is nothing selected
-        boolean areRowsSelected = rowIndices.length > 0;                        // TODO complicated logic, unify with BaseMapView#getAddRow
+        boolean areRowsSelected = rowIndices.length > 0;
         if (!areRowsSelected)
             rowIndices = new int[]{table.getRowCount()};
         for (int row : rowIndices) {
@@ -99,7 +101,7 @@ public class AddPositionAction extends FrameAction {
                 // only insert row in map center once
                 if (hasInsertedRowInMapCenter)
                     continue;
-                center = r.getMapCenter();
+                center = RouteConverter.getInstance().getMapCenter();
                 hasInsertedRowInMapCenter = true;
             }
 
@@ -107,7 +109,7 @@ public class AddPositionAction extends FrameAction {
         }
 
         if (insertedPositions.size() > 0) {
-            List<Integer> insertedRows = new ArrayList<Integer>();
+            List<Integer> insertedRows = new ArrayList<>();
             for (NavigationPosition position : insertedPositions) {
                 int index = positionsModel.getIndex(position);
                 insertedRows.add(index);

@@ -21,10 +21,7 @@
 package slash.navigation.converter.gui.helpers;
 
 import slash.navigation.common.LongitudeAndLatitude;
-import slash.navigation.earthtools.EarthToolsService;
 import slash.navigation.elevation.ElevationService;
-import slash.navigation.geonames.GeoNamesService;
-import slash.navigation.googlemaps.GoogleMapsService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,39 +41,50 @@ import static slash.navigation.common.NavigationConversion.formatElevation;
 public class ElevationServiceFacade {
     private static final Logger log = Logger.getLogger(ElevationServiceFacade.class.getName());
     private static final Preferences preferences = Preferences.userNodeForPackage(ElevationServiceFacade.class);
-    private static final String ELEVATION_SERVICE = "elevationService";
+    private static final String ELEVATION_SERVICE = "elevationService-2.16";
 
     private final List<ElevationService> elevationServices = new ArrayList<>();
+    private ElevationService preferredElevationService;
     private boolean loggedFailedWarning = false;
 
-    public ElevationServiceFacade() {
-        elevationServices.add(new GeoNamesService());
-        elevationServices.add(new GoogleMapsService());
-        elevationServices.add(new EarthToolsService());
+    public void addElevationService(ElevationService elevationService) {
+        ElevationService previous = findElevationService(elevationService.getName());
+        if(previous != null) {
+            elevationServices.set(elevationServices.indexOf(previous), elevationService);
+        } else {
+            elevationServices.add(elevationService);
+            log.info(format("Added elevation service '%s'", elevationService.getName()));
+        }
     }
 
-    public void addElevationService(ElevationService elevationService) {
-        elevationServices.add(0, elevationService);
+    public void setPreferredElevationService(ElevationService preferredElevationService) {
+        this.preferredElevationService = preferredElevationService;
     }
 
     public List<ElevationService> getElevationServices() {
         return elevationServices;
     }
 
-    public ElevationService getElevationService() {
-        ElevationService firstElevationService = elevationServices.get(0);
-        String lookupServiceName = preferences.get(ELEVATION_SERVICE, firstElevationService.getName());
-
-        for (ElevationService service : elevationServices) {
-            if (lookupServiceName.endsWith(service.getName()))
+    public ElevationService findElevationService(String elevationServiceName) {
+        for (ElevationService service : getElevationServices()) {
+            if (elevationServiceName.endsWith(service.getName()))
                 return service;
         }
+        return null;
+    }
+
+    public ElevationService getElevationService() {
+        String lookupServiceName = preferences.get(ELEVATION_SERVICE, preferredElevationService.getName());
+
+        ElevationService service = findElevationService(lookupServiceName);
+        if (service != null)
+            return service;
 
         if (!loggedFailedWarning) {
-            log.warning(format("Failed to find elevation service %s; using first %s", lookupServiceName, firstElevationService.getName()));
+            log.warning(format("Failed to find elevation service %s; using preferred %s", lookupServiceName, preferredElevationService.getName()));
             loggedFailedWarning = true;
         }
-        return firstElevationService;
+        return preferredElevationService;
     }
 
     public void setElevationService(ElevationService service) {
@@ -92,7 +100,7 @@ public class ElevationServiceFacade {
         return getElevationService().isDownload();
     }
 
-    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
-        getElevationService().downloadElevationDataFor(longitudeAndLatitudes);
+    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes, boolean waitForDownload) {
+        getElevationService().downloadElevationDataFor(longitudeAndLatitudes, waitForDownload);
     }
 }

@@ -47,7 +47,15 @@ import java.util.logging.Logger;
 
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
-import static org.apache.http.HttpStatus.*;
+import static org.apache.http.HttpStatus.SC_BAD_REQUEST;
+import static org.apache.http.HttpStatus.SC_FORBIDDEN;
+import static org.apache.http.HttpStatus.SC_MULTIPLE_CHOICES;
+import static org.apache.http.HttpStatus.SC_NOT_FOUND;
+import static org.apache.http.HttpStatus.SC_NOT_MODIFIED;
+import static org.apache.http.HttpStatus.SC_OK;
+import static org.apache.http.HttpStatus.SC_PARTIAL_CONTENT;
+import static org.apache.http.HttpStatus.SC_PRECONDITION_FAILED;
+import static org.apache.http.HttpStatus.SC_UNAUTHORIZED;
 import static org.apache.http.HttpVersion.HTTP_1_1;
 import static slash.common.io.InputOutput.readBytes;
 import static slash.common.io.Transfer.UTF8_ENCODING;
@@ -59,26 +67,31 @@ import static slash.common.io.Transfer.UTF8_ENCODING;
  */
 
 public abstract class HttpRequest {
+    public static final String APPLICATION_XML = "application/xml";
+    public static final String APPLICATION_JSON = "application/json";
+    public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36";
+
     private final Logger log;
     private final HttpClientBuilder clientBuilder = HttpClientBuilder.create();
     private final HttpRequestBase method;
     private HttpResponse response;
     private HttpClientContext context;
+    private RequestConfig.Builder requestConfigBuilder;
 
     HttpRequest(HttpRequestBase method) {
         this.log = Logger.getLogger(getClass().getName());
-        RequestConfig.Builder requestConfigBuilder = RequestConfig.custom();
+        requestConfigBuilder = RequestConfig.custom();
         requestConfigBuilder.setConnectTimeout(15 * 1000);
-        requestConfigBuilder.setSocketTimeout(60 * 1000);
-        clientBuilder.setDefaultRequestConfig(requestConfigBuilder.build());
+        requestConfigBuilder.setSocketTimeout(90 * 1000);
         clientBuilder.setRetryHandler(new DefaultHttpRequestRetryHandler(0, false));
-        setUserAgent("RouteConverter REST Client/" + System.getProperty("rest", "1.6"));
+        setUserAgent("RouteConverter REST Client/" + System.getProperty("rest", "1.8"));
         this.method = method;
     }
 
     HttpRequest(HttpRequestBase method, Credentials credentials) {
         this(method);
-        setAuthentication(credentials);
+        if (credentials != null)
+            setAuthentication(credentials);
     }
 
     HttpRequestBase getMethod() {
@@ -106,6 +119,10 @@ public abstract class HttpRequest {
         clientBuilder.setUserAgent(userAgent);
     }
 
+    public void setSocketTimeout(int socketTimeout) {
+        requestConfigBuilder.setSocketTimeout(socketTimeout);
+    }
+
     protected void setHeader(String name, String value) {
         getMethod().setHeader(name, value);
     }
@@ -119,6 +136,7 @@ public abstract class HttpRequest {
     }
 
     protected HttpResponse execute() throws IOException {
+        clientBuilder.setDefaultRequestConfig(requestConfigBuilder.build());
         try {
             return clientBuilder.build().execute(method, context);
         } catch (SocketException e) {
@@ -132,14 +150,11 @@ public abstract class HttpRequest {
     public String executeAsString() throws IOException {
         try {
             this.response = execute();
-            // no response body then
-            if (isUnAuthorized())
-                return null;
             HttpEntity entity = response.getEntity();
             // HEAD requests don't have a body
             String body = entity != null ? new String(readBytes(entity.getContent()), UTF8_ENCODING) : null;
             if (!isSuccessful() && body != null)
-                log.warning(body);
+                log.warning(format("Body of %s not null: %s", response, body));
             return body;
         } finally {
             release();
@@ -149,8 +164,6 @@ public abstract class HttpRequest {
     public InputStream executeAsStream() throws IOException {
         this.response = execute();
         // no response body then
-        if (isUnAuthorized())
-            return null;
         HttpEntity entity = response.getEntity();
         InputStream body = entity != null ? entity.getContent() : null;
         if (!isSuccessful() && !isNotModified())
@@ -211,5 +224,13 @@ public abstract class HttpRequest {
 
     public boolean isNotFound() throws IOException {
         return getStatusCode() == SC_NOT_FOUND;
+    }
+
+    public boolean isBadRequest() throws IOException {
+        return getStatusCode() == SC_BAD_REQUEST;
+    }
+
+    public boolean isPreconditionFailed() throws IOException {
+        return getStatusCode() == SC_PRECONDITION_FAILED;
     }
 }

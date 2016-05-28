@@ -20,6 +20,7 @@
 
 package slash.navigation.googlemaps;
 
+import slash.navigation.common.BoundingBox;
 import slash.navigation.common.LongitudeAndLatitude;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.common.SimpleNavigationPosition;
@@ -35,12 +36,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.prefs.Preferences;
+import java.util.logging.Logger;
 
 import static java.util.Arrays.sort;
 import static slash.common.io.Transfer.encodeUri;
 import static slash.navigation.common.Bearing.calculateBearing;
+import static slash.navigation.googlemaps.GoogleMapsServer.getGoogleMapsServer;
+import static slash.navigation.googlemaps.GoogleMapsUtil.unmarshalElevation;
 import static slash.navigation.googlemaps.GoogleMapsUtil.unmarshalGeocode;
+import static slash.navigation.rest.HttpRequest.USER_AGENT;
 
 /**
  * Encapsulates REST access to the Google Maps API Geocoding Service.
@@ -49,8 +53,7 @@ import static slash.navigation.googlemaps.GoogleMapsUtil.unmarshalGeocode;
  */
 
 public class GoogleMapsService implements ElevationService {
-    private static final Preferences preferences = Preferences.userNodeForPackage(GoogleMapsService.class);
-    private static final String GOOGLE_MAPS_API_URL_PREFERENCE = "googleMapsApiUrl";
+    private static final Logger log = Logger.getLogger(GoogleMapsService.class.getName());
     private static final String OK = "OK";
     private static final String OVER_QUERY_LIMIT = "OVER_QUERY_LIMIT";
 
@@ -58,29 +61,30 @@ public class GoogleMapsService implements ElevationService {
         return "Google Maps";
     }
 
-    private static String getGoogleMapsApiUrl(String api, String payload) {
+    private String getGoogleMapsApiUrl(String api, String payload) {
         String language = Locale.getDefault().getLanguage();
-        return preferences.get(GOOGLE_MAPS_API_URL_PREFERENCE, "http://maps.googleapis.com/") +
-                "maps/api/" + api + "/xml?" + payload + "&sensor=false&language=" + language;
+        return getGoogleMapsServer().getApiUrl() + "/maps/api/" + api + "/xml?" + payload +
+                "&sensor=false&language=" + language;
     }
 
-    private static String getElevationUrl(String payload) {
+    private String getElevationUrl(String payload) {
         return getGoogleMapsApiUrl("elevation", payload);
     }
 
-    private static String getGeocodingUrl(String payload) {
+    private String getGeocodingUrl(String payload) {
         return getGoogleMapsApiUrl("geocode", payload);
     }
 
     private Get get(String url) {
         Get get = new Get(url);
-        get.setUserAgent("Mozilla/5.0 (Windows; U; MSIE 7.0; Windows NT 5.1)");
+        get.setUserAgent(USER_AGENT);
         return get;
     }
 
     public String getLocationFor(double longitude, double latitude) throws IOException {
         String url = getGeocodingUrl("latlng=" + latitude + "," + longitude);
         Get get = get(url);
+        log.info("Getting location for " + longitude + "," + latitude);
         String result = get.executeAsString();
         if (get.isSuccessful())
             try {
@@ -121,6 +125,7 @@ public class GoogleMapsService implements ElevationService {
     public List<NavigationPosition> getPositionsFor(String address) throws IOException {
         String url = getGeocodingUrl("address=" + encodeUri(address));
         Get get = get(url);
+        log.info("Getting positions for " + address);
         String result = get.executeAsString();
         if (get.isSuccessful())
             try {
@@ -139,7 +144,7 @@ public class GoogleMapsService implements ElevationService {
     }
 
     private List<NavigationPosition> extractAdresses(List<GeocodeResponse.Result> responses) {
-        List<NavigationPosition> result = new ArrayList<NavigationPosition>(responses.size());
+        List<NavigationPosition> result = new ArrayList<>(responses.size());
         for (GeocodeResponse.Result response : responses) {
             GeocodeResponse.Result.Geometry.Location location = response.getGeometry().getLocation();
             result.add(new SimpleNavigationPosition(location.getLng().doubleValue(), location.getLat().doubleValue(),
@@ -149,12 +154,13 @@ public class GoogleMapsService implements ElevationService {
     }
 
     public Double getElevationFor(double longitude, double latitude) throws IOException {
-        String url = getElevationUrl("locations=" + latitude + "," + longitude); // TODO could be up to 512 locations
+        String url = getElevationUrl("locations=" + latitude + "," + longitude); // could be up to 512 locations
         Get get = get(url);
+        log.info("Getting elevation for " + longitude + "," + latitude);
         String result = get.executeAsString();
         if (get.isSuccessful())
             try {
-                ElevationResponse elevationResponse = GoogleMapsUtil.unmarshalElevation(result);
+                ElevationResponse elevationResponse = unmarshalElevation(result);
                 if (elevationResponse != null) {
                     String status = elevationResponse.getStatus();
                     if (status.equals(OK)) {
@@ -171,7 +177,7 @@ public class GoogleMapsService implements ElevationService {
     }
 
     private List<Double> extractElevations(List<ElevationResponse.Result> responses) {
-        List<Double> results = new ArrayList<Double>(responses.size());
+        List<Double> results = new ArrayList<>(responses.size());
         for (ElevationResponse.Result response : responses) {
             results.add(response.getElevation().doubleValue());
         }
@@ -179,6 +185,10 @@ public class GoogleMapsService implements ElevationService {
     }
 
     public boolean isDownload() {
+        return false;
+    }
+
+    public boolean isSupportsPath() {
         return false;
     }
 
@@ -190,7 +200,15 @@ public class GoogleMapsService implements ElevationService {
         throw new UnsupportedOperationException();
     }
 
-    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
+    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes, boolean waitForDownload) {
+        throw new UnsupportedOperationException();
+    }
+
+    public long calculateRemainingDownloadSize(List<BoundingBox> boundingBoxes) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void downloadElevationData(List<BoundingBox> boundingBoxes) {
         throw new UnsupportedOperationException();
     }
 }

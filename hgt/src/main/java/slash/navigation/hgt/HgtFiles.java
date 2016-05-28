@@ -19,10 +19,12 @@
 */
 package slash.navigation.hgt;
 
+import slash.navigation.common.BoundingBox;
 import slash.navigation.common.LongitudeAndLatitude;
 import slash.navigation.datasources.DataSource;
-import slash.navigation.datasources.File;
+import slash.navigation.datasources.Downloadable;
 import slash.navigation.datasources.Fragment;
+import slash.navigation.download.Action;
 import slash.navigation.download.Download;
 import slash.navigation.download.DownloadManager;
 import slash.navigation.download.FileAndChecksum;
@@ -36,7 +38,7 @@ import java.util.prefs.Preferences;
 import static java.lang.String.format;
 import static slash.common.io.Directories.ensureDirectory;
 import static slash.common.io.Directories.getApplicationDirectory;
-import static slash.navigation.download.Action.Flatten;
+import static slash.common.io.Files.removeExtension;
 
 /**
  * Encapsulates access to HGT files.
@@ -48,6 +50,7 @@ public class HgtFiles implements ElevationService {
     private static final Preferences preferences = Preferences.userNodeForPackage(HgtFiles.class);
     private static final String DIRECTORY_PREFERENCE = "directory";
     private static final String BASE_URL_PREFERENCE = "baseUrl";
+    private static final String DOT_HGT = ".hgt";
 
     private final Map<java.io.File, RandomAccessFile> randomAccessFileCache = new HashMap<>();
     private final DataSource dataSource;
@@ -70,6 +73,10 @@ public class HgtFiles implements ElevationService {
         return true;
     }
 
+    public boolean isSupportsPath() {
+        return true;
+    }
+
     public String getPath() {
         return preferences.get(DIRECTORY_PREFERENCE + getName(), "");
     }
@@ -89,14 +96,14 @@ public class HgtFiles implements ElevationService {
     String createFileKey(double longitude, double latitude) {
         int longitudeAsInteger = (int) longitude;
         int latitudeAsInteger = (int) latitude;
-        return format("%s%02d%s%03d", (latitude < 0) ? "S" : "N",
+        return format("%s%02d%s%03d" + DOT_HGT, (latitude < 0) ? "S" : "N",
                 (latitude < 0) ? ((latitudeAsInteger - 1) * -1) : latitudeAsInteger,
                 (longitude < 0) ? "W" : "E",
                 (longitude < 0) ? ((longitudeAsInteger - 1) * -1) : longitudeAsInteger);
     }
 
     private java.io.File createFile(String key) {
-        return new java.io.File(getDirectory(), key + ".hgt");
+        return new java.io.File(getDirectory(), key);
     }
 
     public Double getElevationFor(double longitude, double latitude) throws IOException {
@@ -122,40 +129,105 @@ public class HgtFiles implements ElevationService {
         randomAccessFileCache.clear();
     }
 
-    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes) {
+    public void downloadElevationDataFor(List<LongitudeAndLatitude> longitudeAndLatitudes, boolean waitForDownload) {
         Set<String> keys = new HashSet<>();
         for (LongitudeAndLatitude longitudeAndLatitude : longitudeAndLatitudes) {
             keys.add(createFileKey(longitudeAndLatitude.longitude, longitudeAndLatitude.latitude));
         }
 
-        Set<Fragment> fragments = new HashSet<>();
+        Collection<Downloadable> downloadables = new HashSet<>();
         for (String key : keys) {
-            Fragment fragment = dataSource.getFragment(key);
-            if (fragment != null)
-                fragments.add(fragment);
+            Fragment<Downloadable> fragment = dataSource.getFragment(key);
+            // fallback as long as .hgt is not part of the keys
+            if (fragment == null)
+                fragment = dataSource.getFragment(removeExtension(key));
+            if (fragment != null && !createFile(fragment.getKey()).exists() && !createFile(fragment.getKey() + DOT_HGT).exists())
+                downloadables.add(fragment.getDownloadable());
         }
 
         Collection<Download> downloads = new HashSet<>();
-        for (Fragment<File> fragment : fragments) {
-            if (createFile(fragment.getKey()).exists())
-                continue;
-            downloads.add(download(fragment));
+        for (Downloadable downloadable : downloadables) {
+            downloads.add(download(downloadable));
         }
 
-        if (!downloads.isEmpty())
+        if (!downloads.isEmpty() && waitForDownload)
             downloadManager.waitForCompletion(downloads);
     }
 
-    private Download download(Fragment<File> fragment) {
-        File downloadable = fragment.getDownloadable();
-
+    private Download download(Downloadable downloadable) {
         List<FileAndChecksum> fragments = new ArrayList<>();
-        for (Fragment otherFragments : downloadable.getFragments())
-            fragments.add(new FileAndChecksum(createFile(otherFragments.getKey()), otherFragments.getLatestChecksum()));
+        for (Fragment otherFragments : downloadable.getFragments()) {
+            String key = otherFragments.getKey();
+            if(!key.endsWith(DOT_HGT))
+                key += DOT_HGT;
+            fragments.add(new FileAndChecksum(createFile(key), otherFragments.getLatestChecksum()));
+        }
 
         String uri = downloadable.getUri();
         String url = getBaseUrl() + uri;
-        return downloadManager.queueForDownload(getName() + ": Elevation Data " + uri, url, Flatten,
-                null, new FileAndChecksum(getDirectory(), downloadable.getLatestChecksum()), fragments);
+        return downloadManager.queueForDownload(getName() + " Elevation Tile: " + uri, url, Action.valueOf(dataSource.getAction()),
+                new FileAndChecksum(getDirectory(), downloadable.getLatestChecksum()), fragments);
+    }
+
+    private Collection<Fragment<Downloadable>> getDownloadablesFor(BoundingBox boundingBox) {
+        Collection<Fragment<Downloadable>> result = new HashSet<>();
+
+        double longitude = boundingBox.getSouthWest().getLongitude();
+        while (longitude < boundingBox.getNorthEast().getLongitude()) {
+
+            double latitude = boundingBox.getSouthWest().getLatitude();
+            while (latitude < boundingBox.getNorthEast().getLatitude()) {
+                String key = createFileKey(longitude, latitude);
+                Fragment<Downloadable> fragment = dataSource.getFragment(key);
+                if (fragment != null)
+                    result.add(fragment);
+                latitude += 1.0;
+            }
+
+            longitude += 1.0;
+        }
+        return result;
+    }
+
+    private Collection<Fragment<Downloadable>> getDownloadablesFor(List<BoundingBox> boundingBoxes) {
+        Collection<Fragment<Downloadable>> result = new HashSet<>();
+        for (BoundingBox boundingBox : boundingBoxes)
+            result.addAll(getDownloadablesFor(boundingBox));
+        return result;
+    }
+
+    private Collection<Downloadable> asDownloadableSet(Collection<Fragment<Downloadable>> fragments) {
+        Collection<Downloadable> result = new ArrayList<>();
+        for (Fragment<Downloadable> fragment : fragments)
+            result.add(fragment.getDownloadable());
+        return result;
+    }
+
+    public long calculateRemainingDownloadSize(List<BoundingBox> boundingBoxes) {
+        Collection<Fragment<Downloadable>> fragments = getDownloadablesFor(boundingBoxes);
+
+        Collection<Downloadable> downloadables = new HashSet<>();
+        for (Fragment<Downloadable> fragment : fragments) {
+            java.io.File file = createFile(fragment.getKey());
+            if (!file.exists())
+                downloadables.add(fragment.getDownloadable());
+        }
+
+        long notExists = 0L;
+        for (Downloadable downloadable : downloadables) {
+            Long contentLength = downloadable.getLatestChecksum().getContentLength();
+            if (contentLength == null)
+                continue;
+
+            notExists += contentLength;
+        }
+        return notExists;
+    }
+
+    public void downloadElevationData(List<BoundingBox> boundingBoxes) {
+        Collection<Fragment<Downloadable>> fragments = getDownloadablesFor(boundingBoxes);
+        for (Downloadable downloadable : asDownloadableSet(fragments)) {
+            download(downloadable);
+        }
     }
 }

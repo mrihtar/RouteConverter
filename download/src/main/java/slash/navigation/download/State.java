@@ -35,7 +35,10 @@ public enum State {
     Validating,
 
     NotModified,
+    Outdated,
+
     Succeeded,
+    Stopped,
     NoFileError,
     ChecksumError,
     Failed

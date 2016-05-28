@@ -28,11 +28,7 @@ import slash.common.helpers.JAXBHelper;
 import slash.navigation.viamichelin.binding.ObjectFactory;
 import slash.navigation.viamichelin.binding.PoiList;
 
-import javax.xml.bind.JAXBElement;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.PropertyException;
-import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.*;
 import javax.xml.namespace.QName;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
@@ -45,8 +41,8 @@ import java.io.Reader;
 
 import static javax.xml.bind.Marshaller.JAXB_ENCODING;
 import static javax.xml.bind.Marshaller.JAXB_FRAGMENT;
-import static slash.common.io.Transfer.ISO_LATIN1_ENCODING;
 import static slash.common.helpers.JAXBHelper.newContext;
+import static slash.common.io.Transfer.ISO_LATIN1_ENCODING;
 
 class ViaMichelinUtil {
     private static final String XML_PREAMBLE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
@@ -108,7 +104,7 @@ class ViaMichelinUtil {
                 String header = XML_PREAMBLE + "\n" +
                         "<!DOCTYPE poi_list SYSTEM \"" + VIAMICHELIN_NAMESPACE_URI + "\">";
                 fos.write(header.getBytes());
-                newMarshaller().marshal(new JAXBElement<PoiList>(new QName("poi_list"), PoiList.class, poiList), fos);
+                newMarshaller().marshal(new JAXBElement<>(new QName("poi_list"), PoiList.class, poiList), fos);
             }
             finally {
                 fos.flush();

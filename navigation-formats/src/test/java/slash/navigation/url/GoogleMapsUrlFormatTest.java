@@ -29,10 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static slash.common.TestCase.assertDoubleEquals;
 import static slash.navigation.url.GoogleMapsUrlFormat.isGoogleMapsLinkUrl;
 import static slash.navigation.url.GoogleMapsUrlFormat.isGoogleMapsProfileUrl;
@@ -64,6 +61,8 @@ public class GoogleMapsUrlFormatTest {
     private static final String INPUT8_WWW_NO_COORDINATES ="http://www.google.de/maps?f=d&source=s_d&saddr=hannover&daddr=hamburg&hl=de&geocode=&mra=ls&sll=51.151786,10.415039&sspn=20.697059,39.331055&ie=UTF8&z=9";
 
     private static final String INPUT9_NEW_GOOGLE_MAPS_2014 = "https://www.google.de/maps/dir/Aachen-Rothe+Erde/Mainz-Kastel,+Wiesbaden/Hanns-Martin-Schleyer-Stra%C3%9Fe,+Sindelfingen/@49.8065843,6.491479,8z/data=!3m1!4b1!4m20!4m19!1m5!1m1!1s0x47c09955de781093:0x8b975ed430fb3e53!2m2!1d6.116475!2d50.770202!1m5!1m1!1s0x47bd97a86ffd2e91:0xa4efa4fe12ce70c8!2m2!1d8.282168!2d50.0101878!1m5!1m1!1s0x4799dfcc3a4161f3:0xcd2a1bc2ee961675!2m2!1d9.0001511!2d48.7039074!3e0";
+
+    private static final String INPUT10_NEW_GOOGLE_MAPS_2015 = "https://www.google.at/maps/dir/Sterzing,+Bozen,+Italien/Jaufenpass,+Sankt+Leonhard+in+Passeier,+Bozen,+Italien/Ofenpass,+7532+Cierfs,+Schweiz/Albulapassstrasse,+7482+Berg%C3%BCn%2FBravuogn,+Schweiz/Spl%C3%BCgenpass,+Spl%C3%BCgen,+Schweiz/Via+Roma,+53,+22023+Castiglione+CO,+Italien/@46.4115893,9.1625277,8z/data=!3m1!4b1!4m42!4m41!1m5!1m1!1s0x479d5340912b4fed:0xeccf91de29d6fcf9!2m2!1d11.4336186!2d46.8926725!1m5!1m1!1s0x4782b27a89809711:0xbfb1348a6269dc1!2m2!1d11.3214111!2d46.8395577!1m5!1m1!1s0x47831519f57d6e8b:0xa4a9db7fa9393319!2m2!1d10.2870515!2d46.6418315!1m5!1m1!1s0x47849d1f1792adb3:0x1b8f8898b9521cba!2m2!1d9.8000555!2d46.5815557!1m5!1m1!1s0x4784f6a1054aa397:0x1ffb7aed566559ff!2m2!1d9.33028!2d46.5056!1m5!1m1!1s0x478425a384f4a881:0xcec114200a27651!2m2!1d9.089271!2d45.95557!2m3!1b1!2b1!3b1!3e0";
 
     private GoogleMapsUrlFormat format = new GoogleMapsUrlFormat();
 
@@ -309,8 +308,27 @@ public class GoogleMapsUrlFormatTest {
     }
 
     @Test
+    public void testParseNewGoogleMaps2015FromInput10() {
+        List<Wgs84Position> positions = parsePositions(INPUT10_NEW_GOOGLE_MAPS_2015);
+        assertNotNull(positions);
+        assertEquals(6, positions.size());
+        Wgs84Position position1 = positions.get(0);
+        assertNull(position1.getLongitude());
+        assertNull(position1.getLatitude());
+        assertEquals("Sterzing, Bozen, Italien", position1.getDescription());
+        Wgs84Position position2 = positions.get(1);
+        assertNull(position2.getLongitude());
+        assertNull(position2.getLatitude());
+        assertEquals("Jaufenpass, Sankt Leonhard in Passeier, Bozen, Italien", position2.getDescription());
+        Wgs84Position position3 = positions.get(2);
+        assertNull(position3.getLongitude());
+        assertNull(position3.getLatitude());
+        assertEquals("Ofenpass, 7532 Cierfs, Schweiz", position3.getDescription());
+    }
+
+    @Test
     public void testCreateURL() {
-        List<Wgs84Position> positions = new ArrayList<Wgs84Position>();
+        List<Wgs84Position> positions = new ArrayList<>();
         positions.add(new Wgs84Position(10.02571156, 53.57497745, null, 5.5, null, "Hamburg, Germany"));
         positions.add(new Wgs84Position(10.20026067, 53.57662034, null, 4.5, null, "Stemwarde, Germany"));
         positions.add(new Wgs84Position(10.35735078, 53.59171021, null, 3.5, null, "Gro\u00dfensee, Germany"));

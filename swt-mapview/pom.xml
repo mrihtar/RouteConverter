@@ -2,23 +2,23 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>swt-mapview</artifactId>
     <packaging>jar</packaging>
-    <name>MapView based on the Eclipse SWT library</name>
+    <name>MapView based on the Eclipse SWT JWebBrowser</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.14-SNAPSHOT</version>
+        <version>2.18-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>browser-mapview</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>mapview</artifactId>
+            <artifactId>common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -41,7 +41,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import static java.lang.Integer.MAX_VALUE;
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static slash.common.io.Transfer.trim;
 
 /**
@@ -97,7 +97,7 @@ public class UndoPositionsModel implements PositionsModel {
             return;
 
         if(trackUndo) {
-            List<Object> previousValues = new ArrayList<Object>(columnToValues.getColumnIndices().size());
+            List<Object> previousValues = new ArrayList<>(columnToValues.getColumnIndices().size());
             for (int columnIndex : columnToValues.getColumnIndices()) {
                 previousValues.add(trim(getStringAt(rowIndex, columnIndex)));
             }
@@ -168,11 +168,15 @@ public class UndoPositionsModel implements PositionsModel {
         return delegate.getClosestPosition(longitude, latitude, threshold);
     }
 
+    public int getClosestPosition(CompactCalendar time, long threshold) {
+        return delegate.getClosestPosition(time, threshold);
+    }
+
     // Undoable operations
 
     public void add(int rowIndex, Double longitude, Double latitude, Double elevation, Double speed, CompactCalendar time, String description) {
         BaseNavigationPosition position = getRoute().createPosition(longitude, latitude, elevation, speed, time, description);
-        add(rowIndex, asList(position));
+        add(rowIndex, singletonList(position));
 
     }
 
@@ -214,7 +218,7 @@ public class UndoPositionsModel implements PositionsModel {
         final RemovePositions edit = new RemovePositions(this);
 
         new ContinousRange(rows, new RangeOperation() {
-            private List<NavigationPosition> removed = new ArrayList<NavigationPosition>();
+            private List<NavigationPosition> removed = new ArrayList<>();
 
             public void performOnIndex(int index) {
                 removed.add(0, getRoute().remove(index));
@@ -225,7 +229,7 @@ public class UndoPositionsModel implements PositionsModel {
                     delegate.fireTableRowsDeletedInContinousRange(firstIndex, lastIndex);
                 if (trackUndo)
                     edit.add(firstIndex, removed);
-                removed.clear();
+                removed = new ArrayList<>();
             }
 
             public boolean isInterrupted() {
@@ -246,7 +250,7 @@ public class UndoPositionsModel implements PositionsModel {
     void sort(Comparator<NavigationPosition> comparator, boolean trackUndo) {
         @SuppressWarnings("unchecked")
         List<NavigationPosition> original = getRoute().getPositions();
-        List<NavigationPosition> positions = new ArrayList<NavigationPosition>(original);
+        List<NavigationPosition> positions = new ArrayList<>(original);
         delegate.sort(comparator);
         if (trackUndo)
             undoManager.addEdit(new SortPositions(this, comparator, positions));

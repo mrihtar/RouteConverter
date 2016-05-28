@@ -34,7 +34,7 @@ import java.util.List;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.lang.String.format;
-import static org.apache.commons.io.IOUtils.closeQuietly;
+import static java.util.Arrays.asList;
 import static slash.common.io.InputOutput.DEFAULT_BUFFER_SIZE;
 import static slash.common.type.CompactCalendar.fromMillis;
 import static slash.common.type.HexadecimalNumber.encodeBytes;
@@ -50,7 +50,7 @@ public class Files {
     /**
      * @param file the file to find the extension
      * @return the extension of the file, which are the characters
-     *         starting with the last dot in the file name in lowercase characters
+     * starting with the last dot in the file name in lowercase characters
      */
     public static String getExtension(File file) {
         return getExtension(file.getName());
@@ -59,7 +59,7 @@ public class Files {
     /**
      * @param name the file name to find the extension
      * @return the extension of a file name, which are the characters
-     *         starting with the last dot in the file name in lowercase characters
+     * starting with the last dot in the file name in lowercase characters
      */
     public static String getExtension(String name) {
         int index = name.lastIndexOf(".");
@@ -99,6 +99,13 @@ public class Files {
         name = removeExtension(name);
         name += extension;
         return name;
+    }
+
+    public static String extractFileName(String path) {
+        int index = path.lastIndexOf('/');
+        if (index != -1)
+            path = path.substring(index + 1);
+        return path;
     }
 
     public static File absolutize(File file) {
@@ -250,7 +257,6 @@ public class Files {
         return new File(path, name).getAbsolutePath();
     }
 
-
     public static File[] createTargetFiles(File pattern, int fileCount, String extension, int fileNameLength) {
         File[] files = new File[fileCount];
         if (fileCount == 1) {
@@ -261,6 +267,25 @@ public class Files {
             }
         }
         return files;
+    }
+
+    public static void writePartialFile(InputStream inputStream, long fileSize, File file) throws IOException {
+        RandomAccessFile raf = new RandomAccessFile(file, "rw");
+
+        byte[] buffer = new byte[1024];
+        while (true) {
+            try {
+                int read = inputStream.read(buffer);
+                if (read == -1)
+                    break;
+                raf.write(buffer, 0, read);
+            } catch (EOFException e) {
+                break;
+            }
+        }
+
+        raf.setLength(fileSize);
+        raf.close();
     }
 
     private static final String DEFAULT_ALGORITHM = "SHA1";
@@ -284,11 +309,8 @@ public class Files {
     }
 
     public static String generateChecksum(File file) throws IOException {
-        FileInputStream fis = new FileInputStream(file);
-        try {
-            return generateChecksum(fis);
-        } finally {
-            closeQuietly(fis);
+        try (InputStream inputStream = new FileInputStream(file)) {
+            return generateChecksum(inputStream);
         }
     }
 
@@ -296,11 +318,17 @@ public class Files {
         return fromMillis(file.lastModified());
     }
 
+    public static void setLastModified(File file, Long lastModified) throws IOException {
+        if (lastModified == null)
+            return;
+        if (!file.setLastModified(lastModified))
+            throw new IOException(format("Could not set last modified of %s to %s", file, lastModified));
+    }
+
     public static void setLastModified(File file, CompactCalendar lastModified) throws IOException {
         if (lastModified == null)
             return;
-        if (!file.setLastModified(lastModified.getTimeInMillis()))
-            throw new IOException(format("Could not set last modified of %s to %s", file, lastModified));
+        setLastModified(file, lastModified.getTimeInMillis());
     }
 
     /**
@@ -346,7 +374,7 @@ public class Files {
      * @param path      the path to collect files below
      * @param extension the case insensitively compare extension
      * @return the list of files found below the given path and
-     *         with the given extension
+     * with the given extension
      */
     public static List<File> collectFiles(File path, String extension) {
         List<File> list = new ArrayList<>(1);
@@ -355,11 +383,42 @@ public class Files {
         return list;
     }
 
+    public static List<File> collectFiles(List<File> files) {
+        List<File> result = new ArrayList<>();
+        for (File file : files) {
+            if (file.isFile())
+                result.add(file);
+            else if (file.isDirectory()) {
+                File[] list = file.listFiles(new FileFileFilter());
+                if (list != null)
+                    result.addAll(asList(list));
+            }
+        }
+        return result;
+    }
+
     public static File findExistingPath(File path) {
         while (path != null && !path.exists()) {
             path = path.getParentFile();
         }
         return path != null && path.exists() ? path : null;
+    }
+
+    private static void delete(File file) throws IOException {
+        if (file.exists() && !file.delete())
+            throw new IOException(format("Cannot delete %s", file));
+    }
+
+    public static void recursiveDelete(File path) throws IOException {
+        File[] files = path.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory())
+                    recursiveDelete(file);
+                delete(file);
+            }
+        }
+        delete(path);
     }
 
     public static String printArrayToDialogString(Object[] array) {

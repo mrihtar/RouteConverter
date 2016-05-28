@@ -52,14 +52,14 @@ public class Extractor {
     }
 
     private void doExtract(File tempFile, File destination, boolean flatten) throws IOException {
-        ZipInputStream zipInputStream = null;
-        try {
-            zipInputStream = new ZipInputStream(new FileInputStream(tempFile));
+        try (ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(tempFile))) {
             ZipEntry entry = zipInputStream.getNextEntry();
             while (entry != null) {
                 if (entry.isDirectory()) {
-                    if (!flatten)
-                        ensureDirectory(new File(destination, entry.getName()).getPath());
+                    if (!flatten) {
+                        File directory = new File(destination, entry.getName());
+                        handleDirectory(directory, entry);
+                    }
 
                 } else {
                     File extracted;
@@ -68,7 +68,8 @@ public class Extractor {
                     else {
                         extracted = new File(destination, entry.getName());
                     }
-                    ensureDirectory(extracted.getParent());
+                    File directory = extracted.getParentFile();
+                    handleDirectory(directory, entry);
 
                     log.info(format("Extracting from %s to %s", tempFile, extracted));
                     FileOutputStream output = new FileOutputStream(extracted);
@@ -83,10 +84,11 @@ public class Extractor {
                 entry = zipInputStream.getNextEntry();
             }
         }
-        finally {
-            if (zipInputStream != null)
-                closeQuietly(zipInputStream);
-        }
+    }
+
+    private void handleDirectory(File directory, ZipEntry entry) throws IOException {
+        ensureDirectory(directory.getPath());
+        setLastModified(directory, fromMillis(entry.getTime()));
     }
 
     public void flatten(File tempFile, File destination) throws IOException {

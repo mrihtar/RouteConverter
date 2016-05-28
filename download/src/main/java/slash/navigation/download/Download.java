@@ -20,13 +20,20 @@
 
 package slash.navigation.download;
 
+import slash.common.type.CompactCalendar;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static java.io.File.createTempFile;
+import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static slash.common.io.Directories.getTemporaryDirectory;
-import static slash.navigation.download.State.Queued;
+import static slash.navigation.download.Action.Copy;
+import static slash.navigation.download.State.*;
 
 /**
  * A file to download
@@ -37,10 +44,10 @@ import static slash.navigation.download.State.Queued;
 public class Download {
     private final String description, url;
     private String eTag;
-    private final Action action;
-    private final FileAndChecksum file;
+    private Action action;
+    private FileAndChecksum file;
+    private List<FileAndChecksum> fragments;
     private final File tempFile;
-    private final List<FileAndChecksum> fragments;
 
     private State state;
     private long processedBytes;
@@ -50,25 +57,25 @@ public class Download {
                     List<FileAndChecksum> fragments, String eTag, State state, File tempFile) {
         this.description = description;
         this.url = url;
-        this.action = action;
-        this.file = file;
-        this.fragments = fragments;
+        setAction(action);
+        setFile(file);
+        setFragments(fragments);
         setETag(eTag);
         this.state = state;
         this.tempFile = tempFile;
     }
 
-    public Download(String description, String url, Action action, String eTag, FileAndChecksum file,
+    public Download(String description, String url, Action action, FileAndChecksum file,
                     List<FileAndChecksum> fragments) {
-        this(description, url, action, file, fragments, eTag, Queued, newTempFile());
+        this(description, url, action, file, fragments, null, Queued, newTempFile());
     }
 
     private static File newTempFile() {
         try {
-            File file = createTempFile("download", ".tmp", getTemporaryDirectory());
-            if(!file.delete())
+            File temp = createTempFile("download", ".tmp", getTemporaryDirectory());
+            if (!temp.delete())
                 throw new IllegalArgumentException("Cannot delete temp file");
-            return file;
+            return temp;
         } catch (IOException e) {
             throw new IllegalArgumentException("Cannot create temp file", e);
         }
@@ -86,19 +93,31 @@ public class Download {
         return action;
     }
 
+    public void setAction(Action action) {
+        this.action = action;
+    }
+
     public FileAndChecksum getFile() {
         return file;
+    }
+
+    public void setFile(FileAndChecksum file) {
+        this.file = file;
     }
 
     public List<FileAndChecksum> getFragments() {
         return fragments;
     }
 
+    public void setFragments(List<FileAndChecksum> fragments) {
+        this.fragments = fragments;
+    }
+
     public String getETag() {
         return eTag;
     }
 
-    void setETag(String eTag) {
+    public void setETag(String eTag) {
         this.eTag = eTag != null ? eTag.replaceAll("-gzip", "") : null;
     }
 
@@ -114,19 +133,46 @@ public class Download {
         return tempFile;
     }
 
-    private static final int UNKNOWN_EXPECTED_BYTES = 1024 * 1024 * 1024;
+    public Integer getPercentage() {
+        return expectedBytes != null ? (int) (processedBytes / (double) expectedBytes * 100.0) : null;
+    }
 
-    public int getPercentage() {
-        long totalBytes = expectedBytes != null ? expectedBytes : UNKNOWN_EXPECTED_BYTES;
-        return new Double((double) processedBytes / totalBytes * 100).intValue();
+    public long getProcessedBytes() {
+        return processedBytes;
     }
 
     public void setProcessedBytes(long processedBytes) {
         this.processedBytes = processedBytes;
     }
 
+    public Long getExpectedBytes() {
+        return expectedBytes;
+    }
+
     public void setExpectedBytes(Long expectedBytes) {
         this.expectedBytes = expectedBytes;
+    }
+
+    private static final Set<State> DOWNLOADED = new HashSet<>(asList(NotModified, Succeeded));
+    private static final Set<Action> COPY = new HashSet<>(singletonList(Copy));
+
+    private Checksum getChecksum() {
+        return DOWNLOADED.contains(getState()) && COPY.contains(getAction()) ?
+                file.getActualChecksum() : file.getExpectedChecksum();
+    }
+
+    public Long getSize() {
+        Checksum checksum = getChecksum();
+        return checksum != null ? checksum.getContentLength() : null;
+    }
+
+    public CompactCalendar getLastModified() {
+        Checksum checksum = getChecksum();
+        return checksum != null ? checksum.getLastModified() : null;
+    }
+
+    public String toString() {
+        return super.toString() + "[url=" + getUrl() + "]";
     }
 
     public boolean equals(Object o) {

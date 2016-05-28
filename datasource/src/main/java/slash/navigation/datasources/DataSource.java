@@ -31,13 +31,18 @@ import java.util.List;
 public interface DataSource {
     String getId();
     String getName();
+    String getHref();
     String getBaseUrl();
     String getDirectory();
+    String getAction();
 
     List<File> getFiles();
     List<Map> getMaps();
     List<Theme> getThemes();
 
     Downloadable getDownloadable(String uri);
-    Fragment getFragment(String key);
+    Fragment<Downloadable> getFragment(String key);
+
+    Downloadable getDownloadableBySHA1(String sha1);
+    Fragment<Downloadable> getFragmentBySHA1(String sha1);
 }

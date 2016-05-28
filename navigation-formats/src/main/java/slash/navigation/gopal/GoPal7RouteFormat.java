@@ -20,7 +20,6 @@
 
 package slash.navigation.gopal;
 
-import slash.common.type.CompactCalendar;
 import slash.navigation.base.ParserContext;
 import slash.navigation.base.RouteCharacteristics;
 import slash.navigation.common.NavigationPosition;
@@ -35,7 +34,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.prefs.Preferences;
 
 import static slash.navigation.common.NavigationConversion.formatPosition;
 import static slash.navigation.common.NavigationConversion.formatSpeed;
@@ -49,11 +47,10 @@ import static slash.navigation.gopal.GoPalUtil.unmarshal5;
  */
 
 public class GoPal7RouteFormat extends GoPalRouteFormat<GoPalRoute> {
-    private static final Preferences preferences = Preferences.userNodeForPackage(GoPal7RouteFormat.class);
     private static final String ROUTE_OPTIONS_SPEED_UNIT = "km_h";
     private static final String VERSION_PREFIX = "v7";
 
-    private static final Map<String, Short> COUNTRY_TO_CODE = new HashMap<String, Short>();
+    private static final Map<String, Short> COUNTRY_TO_CODE = new HashMap<>();
     static {
         COUNTRY_TO_CODE.put("Deutschland", (short)49);
         COUNTRY_TO_CODE.put("Frankreich", (short)31);
@@ -65,8 +62,8 @@ public class GoPal7RouteFormat extends GoPalRouteFormat<GoPalRoute> {
         return "GoPal 7 Route (*" + getExtension() + ")";
     }
 
-    public int getMaximumPositionCount() {
-        return preferences.getInt(VERSION_PREFIX + "MaximumPositionCount", UNLIMITED_MAXIMUM_POSITION_COUNT);
+    protected String getVersion() {
+        return VERSION_PREFIX;
     }
 
     @SuppressWarnings("unchecked")
@@ -75,7 +72,7 @@ public class GoPal7RouteFormat extends GoPalRouteFormat<GoPalRoute> {
     }
 
     private GoPalRoute process(Tour tour) {
-        List<GoPalPosition> positions = new ArrayList<GoPalPosition>();
+        List<GoPalPosition> positions = new ArrayList<>();
         Tour.Start start = tour.getStart();
         if (start != null) {
             Short country = start.getCountry() != null ? start.getCountry().getCode() : null;
@@ -110,7 +107,7 @@ public class GoPal7RouteFormat extends GoPalRouteFormat<GoPalRoute> {
         return new GoPalRoute(this, null, tour.getRouteOptions(), positions);
     }
 
-    public void read(InputStream source, CompactCalendar startDate, ParserContext<GoPalRoute> context) throws Exception {
+    public void read(InputStream source, ParserContext<GoPalRoute> context) throws Exception {
         Tour tour = unmarshal5(source);
         GoPalRoute process = process(tour);
         if (process != null)

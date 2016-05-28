@@ -48,31 +48,45 @@ public class RoutingServiceFacade {
     private static final String AVOID_TOLLS_PREFERENCE = "avoidTolls";
 
     private final List<RoutingService> routingServices = new ArrayList<>();
+    private RoutingService preferredRoutingService = null;
     private final EventListenerList listenerList = new EventListenerList();
     private boolean loggedFailedRoutingServiceWarning = false, loggedFailedTravelModeWarning = false;
+
+    public void addRoutingService(RoutingService routingService) {
+        routingServices.add(routingService);
+        log.info(format("Added routing service '%s'", routingService.getName()));
+    }
+
+    public void setPreferredRoutingService(RoutingService preferredRoutingService) {
+        this.preferredRoutingService = preferredRoutingService;
+    }
 
     public List<RoutingService> getRoutingServices() {
         return routingServices;
     }
 
-    public void addRoutingService(RoutingService routingService) {
-        routingServices.add(0, routingService);
+    @SuppressWarnings("unchecked")
+    public <T> T getRoutingService(Class<T> clazz) {
+        for(RoutingService service : getRoutingServices()) {
+            if(service.getClass().equals(clazz))
+                return (T)service;
+        }
+        return null;
     }
 
     public RoutingService getRoutingService() {
-        RoutingService firstRoutingService = getRoutingServices().get(0);
-        String lookupServiceName = preferences.get(ROUTING_SERVICE_PREFERENCE, firstRoutingService.getName());
+        String lookupServiceName = preferences.get(ROUTING_SERVICE_PREFERENCE, preferredRoutingService.getName());
 
         for (RoutingService service : getRoutingServices()) {
             if (lookupServiceName.endsWith(service.getName()))
                 return service;
         }
 
-        if(!loggedFailedRoutingServiceWarning) {
-            log.warning(format("Failed to find routing service %s; using first", lookupServiceName));
+        if (!loggedFailedRoutingServiceWarning) {
+            log.warning(format("Failed to find routing service %s; using preferred %s", lookupServiceName, preferredRoutingService.getName()));
             loggedFailedRoutingServiceWarning = true;
         }
-        return firstRoutingService;
+        return preferredRoutingService;
     }
 
     public void setRoutingService(RoutingService service) {
@@ -81,15 +95,16 @@ public class RoutingServiceFacade {
     }
 
     public TravelMode getTravelMode() {
-        TravelMode preferredTravelMode = getRoutingService().getPreferredTravelMode();
-        String lookupName = preferences.get(TRAVEL_MODE_PREFERENCE + getRoutingService().getName(), preferredTravelMode.getName());
+        RoutingService service = getRoutingService();
+        TravelMode preferredTravelMode = service.getPreferredTravelMode();
+        String lookupName = preferences.get(TRAVEL_MODE_PREFERENCE + service.getName(), preferredTravelMode.getName());
 
-        for (TravelMode travelMode : getRoutingService().getAvailableTravelModes()) {
+        for (TravelMode travelMode : service.getAvailableTravelModes()) {
             if (lookupName.equals(travelMode.getName()))
                 return travelMode;
         }
 
-        if(!loggedFailedTravelModeWarning) {
+        if (!loggedFailedTravelModeWarning) {
             log.warning(format("Failed to find travel mode %s; using preferred travel mode %s", lookupName, preferredTravelMode.getName()));
             loggedFailedTravelModeWarning = true;
         }
@@ -102,7 +117,7 @@ public class RoutingServiceFacade {
     }
 
     public boolean isAvoidFerries() {
-        return preferences.getBoolean(AVOID_FERRIES_PREFERENCE + getRoutingService().getName(), true);
+        return preferences.getBoolean(AVOID_FERRIES_PREFERENCE + getRoutingService().getName(), false);
     }
 
     public void setAvoidFerries(boolean avoidFerries) {
@@ -111,7 +126,7 @@ public class RoutingServiceFacade {
     }
 
     public boolean isAvoidHighways() {
-        return preferences.getBoolean(AVOID_HIGHWAYS_PREFERENCE + getRoutingService().getName(), true);
+        return preferences.getBoolean(AVOID_HIGHWAYS_PREFERENCE + getRoutingService().getName(), false);
     }
 
     public void setAvoidHighways(boolean avoidHighways) {
@@ -120,7 +135,7 @@ public class RoutingServiceFacade {
     }
 
     public boolean isAvoidTolls() {
-        return preferences.getBoolean(AVOID_TOLLS_PREFERENCE + getRoutingService().getName(), true);
+        return preferences.getBoolean(AVOID_TOLLS_PREFERENCE + getRoutingService().getName(), false);
     }
 
     public void setAvoidTolls(boolean avoidTolls) {
@@ -139,5 +154,9 @@ public class RoutingServiceFacade {
 
     public void addChangeListener(ChangeListener l) {
         listenerList.add(ChangeListener.class, l);
+    }
+
+    public void removeChangeListener(ChangeListener l) {
+        listenerList.remove(ChangeListener.class, l);
     }
 }

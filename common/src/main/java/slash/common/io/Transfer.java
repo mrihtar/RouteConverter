@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
@@ -39,6 +40,8 @@ import java.util.prefs.Preferences;
 import static java.lang.Double.POSITIVE_INFINITY;
 import static java.lang.Integer.toHexString;
 import static java.lang.Math.*;
+import static java.text.DateFormat.MEDIUM;
+import static java.text.DateFormat.SHORT;
 import static java.util.Calendar.*;
 import static slash.common.type.CompactCalendar.UTC;
 import static slash.common.type.CompactCalendar.fromMillis;
@@ -54,6 +57,8 @@ public class Transfer {
 
     private static final Preferences preferences = Preferences.userNodeForPackage(Transfer.class);
     private static final Logger log = Logger.getLogger(Transfer.class.getName());
+    private static final String REDUCE_TIME_TO_SECOND_PRECISION_PREFERENCE = "reduceTimeToSecondPrecision";
+
     public static final String ISO_LATIN1_ENCODING = "ISO-8859-1";
     public static final String UTF8_ENCODING = "UTF-8";
     public static final String UTF16_ENCODING = "UTF-16";
@@ -71,6 +76,10 @@ public class Transfer {
 
     public static double roundMeterToMillimeterPrecision(double number) {
         return floor(number * 10000.0) / 10000.0;
+    }
+
+    public static long roundMillisecondsToSecondPrecision(long number) {
+        return (number / 1000) * 1000;
     }
 
     public static int ceiling(int dividend, int divisor, boolean roundUpToAtLeastOne) {
@@ -97,6 +106,12 @@ public class Transfer {
         if (string == null)
             return null;
         return string.substring(0, min(string.length(), length));
+    }
+
+    public static String trimLineFeeds(String string) {
+        string = string.replace('\n', ' ');
+        string = string.replace('\r', ' ');
+        return string;
     }
 
     public static String toMixedCase(String string) {
@@ -211,7 +226,7 @@ public class Transfer {
         return formatIntAsString((int) hours, 2) + ":" + formatIntAsString((int) minutes % 60, 2) + ":" + formatIntAsString((int) seconds % 60, 2);
     }
 
-    public static Integer parseInt(String string) {
+    public static Integer parseInteger(String string) {
         String trimmed = trim(string);
         if (trimmed != null) {
             if (trimmed.startsWith("+"))
@@ -219,6 +234,11 @@ public class Transfer {
             return Integer.parseInt(trimmed);
         } else
             return null;
+    }
+
+    public static int parseInt(String string) {
+        Integer integer = parseInteger(string);
+        return integer != null ? integer : -1;
     }
 
     public static Long parseLong(String string) {
@@ -289,17 +309,38 @@ public class Transfer {
         return builder.toString();
     }
 
-    public static String asUtf8(String string) {
-        try {
-            byte[] bytes = string.getBytes(UTF8_ENCODING);
-            return new String(bytes);
-        } catch (UnsupportedEncodingException e) {
-            log.severe("Cannot encode " + string + " as " + UTF8_ENCODING + ": " + e);
-            return string;
+    private static final DateFormat dateTimeFormat = DateFormat.getDateTimeInstance(SHORT, MEDIUM);
+    private static String currentDateTimeTimeZone = "";
+    private static final DateFormat dateFormat = DateFormat.getDateInstance(SHORT);
+    private static String currentDateTimeZone = "";
+    private static final DateFormat timeFormat = DateFormat.getTimeInstance(MEDIUM);
+    private static String currentTimeTimeZone = "";
+
+    public synchronized static DateFormat getDateTimeFormat(String timeZonePreference) {
+        if (!currentDateTimeTimeZone.equals(timeZonePreference)) {
+            dateTimeFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
+            currentDateTimeTimeZone = timeZonePreference;
         }
+        return dateTimeFormat;
     }
 
-    public static CompactCalendar parseTime(XMLGregorianCalendar calendar) {
+    public synchronized static DateFormat getDateFormat(String timeZonePreference) {
+        if (!currentDateTimeZone.equals(timeZonePreference)) {
+            dateFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
+            currentDateTimeZone = timeZonePreference;
+        }
+        return dateFormat;
+    }
+
+    public synchronized static DateFormat getTimeFormat(String timeZonePreference) {
+        if (!currentTimeTimeZone.equals(timeZonePreference)) {
+            timeFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
+            currentTimeTimeZone = timeZonePreference;
+        }
+        return timeFormat;
+    }
+
+    public static CompactCalendar parseXMLTime(XMLGregorianCalendar calendar) {
         if (calendar == null)
             return null;
         GregorianCalendar gregorianCalendar = calendar.toGregorianCalendar(UTC, null, null);
@@ -315,11 +356,11 @@ public class Transfer {
         return datatypeFactory;
     }
 
-    public static XMLGregorianCalendar formatTime(CompactCalendar time) {
-       return formatTime(time, preferences.getBoolean("reduceTimeToSecondPrecision", false));
+    public static XMLGregorianCalendar formatXMLTime(CompactCalendar time) {
+       return formatXMLTime(time, preferences.getBoolean(REDUCE_TIME_TO_SECOND_PRECISION_PREFERENCE, false));
     }
 
-    public static XMLGregorianCalendar formatTime(CompactCalendar time, boolean reduceTimeToSecondPrecision) {
+    public static XMLGregorianCalendar formatXMLTime(CompactCalendar time, boolean reduceTimeToSecondPrecision) {
         if (time == null)
             return null;
         try {

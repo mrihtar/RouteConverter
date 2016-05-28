@@ -28,7 +28,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static java.util.Locale.ENGLISH;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -45,7 +45,7 @@ public class GoogleMapsServiceIT {
     public void getLocationFor() throws IOException {
         assertEquals("Chammstrasse 28, 8638 Goldingen, Switzerland", service.getLocationFor(9.0, 47.3));
         assertEquals("B\u00fchlstra\u00dfe 21, 97506 Grafenrheinfeld, Germany", service.getLocationFor(10.2, 50.001));
-        assertEquals("Sch\u00f6ng\u00E4nge, 82467 Garmisch-Partenkirchen, Germany", service.getLocationFor(11.06561, 47.42428));
+        assertTrue(service.getLocationFor(11.06561, 47.42428).endsWith("82467 Garmisch-Partenkirchen, Germany"));
         assertEquals(null, service.getLocationFor(0.0, 0.0));
         assertEquals(null, service.getLocationFor(0.0, 90.0));
         assertTrue(service.getLocationFor(0.0, -90.0).contains("Antarctica"));
@@ -65,7 +65,7 @@ public class GoogleMapsServiceIT {
     public void getPositionsFor() throws IOException {
         NavigationPosition expected = new SimpleNavigationPosition(10.2004684, 50.0010183, 0.0, "B\u00fchlstra\u00dfe, 97506 Grafenrheinfeld, Germany");
         List<NavigationPosition> actual = service.getPositionsFor("B\u00fchlstra\u00dfe, 97506 Grafenrheinfeld, Germany");
-        assertEquals(asList(expected), actual);
+        assertEquals(singletonList(expected), actual);
     }
 
     @Test

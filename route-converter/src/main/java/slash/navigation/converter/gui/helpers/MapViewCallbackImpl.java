@@ -21,12 +21,17 @@
 package slash.navigation.converter.gui.helpers;
 
 import slash.navigation.converter.gui.RouteConverter;
-import slash.navigation.converter.gui.mapview.MapView;
-import slash.navigation.converter.gui.mapview.MapViewCallback;
+import slash.navigation.mapview.MapView;
+import slash.navigation.mapview.MapViewCallback;
 import slash.navigation.routing.RoutingService;
 import slash.navigation.routing.TravelMode;
 
 import javax.swing.event.ChangeListener;
+import java.awt.*;
+import java.io.File;
+
+import static slash.navigation.converter.gui.helpers.PositionHelper.formatLatitude;
+import static slash.navigation.converter.gui.helpers.PositionHelper.formatLongitude;
 
 /**
  * Implements the callbacks from the {@link MapView} to the other RouteConverter services.
@@ -35,12 +40,21 @@ import javax.swing.event.ChangeListener;
  */
 
 public class MapViewCallbackImpl implements MapViewCallback {
+
     public String createDescription(int index, String description) {
-        return RouteConverter.getInstance().getBatchPositionAugmenter().createDescription(index, description);
+        return RouteConverter.getInstance().getPositionAugmenter().createDescription(index, description);
     }
 
-    public void complementData(int[] rows, boolean description, boolean time, boolean elevation) {
-        RouteConverter.getInstance().getBatchPositionAugmenter().addData(rows, description, time, elevation);
+    public String createCoordinates(Double longitude, Double latitude) {
+        return formatLongitude(longitude) + "," + formatLatitude(latitude);
+    }
+
+    public void complementData(int[] rows, boolean description, boolean time, boolean elevation, boolean waitForDownload, boolean trackUndo) {
+        RouteConverter.getInstance().getPositionAugmenter().addData(rows, description, time, elevation, waitForDownload, trackUndo);
+    }
+
+    public void startBrowser(String url) {
+        ExternalPrograms.startBrowser(RouteConverter.getInstance().getFrame(), url);
     }
 
     public RoutingService getRoutingService() {
@@ -49,6 +63,14 @@ public class MapViewCallbackImpl implements MapViewCallback {
 
     public TravelMode getTravelMode() {
         return RouteConverter.getInstance().getRoutingServiceFacade().getTravelMode();
+    }
+
+    public Color getRouteColor() {
+        return RouteConverter.getInstance().getRouteColorModel().getColor();
+    }
+
+    public Color getTrackColor() {
+        return RouteConverter.getInstance().getTrackColorModel().getColor();
     }
 
     public boolean isAvoidFerries() {
@@ -63,7 +85,15 @@ public class MapViewCallbackImpl implements MapViewCallback {
         return RouteConverter.getInstance().getRoutingServiceFacade().isAvoidTolls();
     }
 
+    public File getTileServersDirectory() {
+        return RouteConverter.getInstance().getTileServersDirectory();
+    }
+
     public void addChangeListener(ChangeListener l) {
         RouteConverter.getInstance().getRoutingServiceFacade().addChangeListener(l);
+    }
+
+    public void removeChangeListener(ChangeListener l) {
+        RouteConverter.getInstance().getRoutingServiceFacade().removeChangeListener(l);
     }
 }

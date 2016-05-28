@@ -21,10 +21,8 @@
 package slash.navigation.converter.gui.helpers;
 
 import slash.common.type.CompactCalendar;
-import slash.navigation.common.NavigationPosition;
 import slash.navigation.base.RouteCharacteristics;
-import slash.navigation.converter.gui.RouteConverter;
-import slash.navigation.converter.gui.mapview.AbstractMapViewListener;
+import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.models.CharacteristicsModel;
 import slash.navigation.converter.gui.models.PositionsModel;
 
@@ -82,7 +80,7 @@ public class LengthCalculator {
                                 e.getColumn() == LATITUDE_COLUMN_INDEX ||
                                 e.getColumn() == ALL_COLUMNS))
                     return;
-                if (LengthCalculator.this.positionsModel.isContinousRange())
+                if (getPositionsModel().isContinousRange())
                     return;
 
                 calculateDistance();
@@ -97,12 +95,10 @@ public class LengthCalculator {
                 calculateDistance();
             }
         });
+    }
 
-        RouteConverter.getInstance().addMapViewListener(new AbstractMapViewListener() {
-            public void calculatedDistance(int meters, int seconds) {
-                fireCalculatedDistance(meters, seconds);
-            }
-        });
+    private PositionsModel getPositionsModel() {
+        return positionsModel;
     }
 
     private final List<LengthCalculatorListener> lengthCalculatorListeners = new CopyOnWriteArrayList<>();
@@ -111,7 +107,7 @@ public class LengthCalculator {
         lengthCalculatorListeners.add(listener);
     }
 
-    private void fireCalculatedDistance(int meters, int seconds) {
+    public void fireCalculatedDistance(double meters, long seconds) {
         for (LengthCalculatorListener listener : lengthCalculatorListeners) {
             listener.calculatedDistance(meters, seconds);
         }
@@ -122,8 +118,7 @@ public class LengthCalculator {
             fireCalculatedDistance(0, 0);
             return;
         }
-
-        if (getCharacteristics().equals(Route) && RouteConverter.getInstance().isMapViewInitialized())
+        if (getCharacteristics().equals(Route))
             return;
 
         synchronized (notificationMutex) {
@@ -159,14 +154,14 @@ public class LengthCalculator {
             }
 
             if (i > 0 && i % 100 == 0)
-                fireCalculatedDistance((int) distanceMeters, totalTimeMilliSeconds > 0 ? (int) (totalTimeMilliSeconds / 1000) : 0);
+                fireCalculatedDistance(distanceMeters, totalTimeMilliSeconds > 0 ? totalTimeMilliSeconds / 1000 : 0);
 
             previous = next;
         }
 
         long summedUp = totalTimeMilliSeconds > 0 ? totalTimeMilliSeconds / 1000 : 0;
         long maxMinusMin = minimumTime != null ? (maximumTime.getTimeInMillis() - minimumTime.getTimeInMillis()) / 1000 : 0;
-        fireCalculatedDistance((int) distanceMeters, (int) max(maxMinusMin, summedUp));
+        fireCalculatedDistance(distanceMeters, max(maxMinusMin, summedUp));
     }
 
     private void initialize() {

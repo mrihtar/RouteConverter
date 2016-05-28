@@ -22,24 +22,29 @@ package slash.navigation.converter.gui.helpers;
 
 import slash.common.type.CompactCalendar;
 import slash.navigation.base.BaseNavigationPosition;
-import slash.navigation.common.NavigationPosition;
+import slash.navigation.base.WaypointType;
+import slash.navigation.base.Wgs84Position;
 import slash.navigation.common.DegreeFormat;
+import slash.navigation.common.NavigationPosition;
 import slash.navigation.common.UnitSystem;
 import slash.navigation.converter.gui.RouteConverter;
+import slash.navigation.converter.gui.models.StringModel;
 
-import java.text.DateFormat;
+import java.io.File;
 import java.text.ParseException;
 import java.util.Date;
-import java.util.TimeZone;
 import java.util.prefs.Preferences;
 
 import static java.lang.Math.abs;
 import static java.lang.Math.round;
 import static java.lang.String.format;
-import static java.text.DateFormat.MEDIUM;
-import static java.text.DateFormat.SHORT;
+import static slash.common.io.Transfer.getDateFormat;
+import static slash.common.io.Transfer.getDateTimeFormat;
+import static slash.common.io.Transfer.getTimeFormat;
 import static slash.common.io.Transfer.roundFraction;
 import static slash.common.type.CompactCalendar.fromDate;
+import static slash.navigation.base.WaypointType.Photo;
+import static slash.navigation.base.WaypointType.Voice;
 
 /**
  * A helper for rendering aspects of {@link BaseNavigationPosition}.
@@ -53,9 +58,8 @@ public class PositionHelper {
     private static final double maximumDistanceDisplayedInMeters = preferences.getDouble("maximumDistanceDisplayedInMeters", 10000.0);
     private static final double maximumDistanceDisplayedInHundredMeters = preferences.getDouble("maximumDistanceDisplayedInHundredMeters", 200000.0);
 
-    private static final DateFormat dateTimeFormat = DateFormat.getDateTimeInstance(SHORT, MEDIUM);
-    private static final DateFormat timeFormat = DateFormat.getTimeInstance(MEDIUM);
-    private static String currentTimeZone = "";
+    private static final int KILO_BYTE = 1024;
+    private static final int MEGA_BYTE = KILO_BYTE * KILO_BYTE;
 
     public static String formatDistance(Double distance) {
         if (distance == null || distance <= 0.0)
@@ -96,7 +100,7 @@ public class PositionHelper {
         return degreeFormat.latitudeToDegrees(latitude);
     }
 
-    private static String formatSpeed(Double speed) {
+    public static String formatSpeed(Double speed) {
         if (speed == null)
             return "";
         UnitSystem unitSystem = RouteConverter.getInstance().getUnitSystemModel().getUnitSystem();
@@ -111,42 +115,57 @@ public class PositionHelper {
         return formatSpeed(position.getSpeed());
     }
 
-    private static DateFormat getDateTimeFormat(String timeZonePreference) {
-        if (!currentTimeZone.equals(timeZonePreference)) {
-            dateTimeFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
-            currentTimeZone = timeZonePreference;
-        }
-        return dateTimeFormat;
+    public static String extractTemperature(NavigationPosition position) {
+        if (!(position instanceof Wgs84Position))
+            return "";
+        Double temperature = ((Wgs84Position) position).getTemperature();
+        if (temperature == null)
+            return "";
+        return format("%d\u00B0C", round(temperature));
     }
 
-    private static DateFormat getTimeFormat(String timeZonePreference) {
-        if (!currentTimeZone.equals(timeZonePreference)) {
-            timeFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
-            currentTimeZone = timeZonePreference;
-        }
-        return timeFormat;
-    }
-
-    public static String formatDate(CompactCalendar time) {
-        DateFormat dateFormat = DateFormat.getDateInstance(SHORT);
-        String timeZonePreference = RouteConverter.getInstance().getTimeZonePreference();
-        dateFormat.setTimeZone(TimeZone.getTimeZone(timeZonePreference));
-        return dateFormat.format(time.getTime());
+    public static String extractPressure(NavigationPosition position) {
+        if (!(position instanceof Wgs84Position))
+            return "";
+        Double pressure = ((Wgs84Position) position).getPressure();
+        if(pressure == null)
+            return "";
+        return format("%d hPa", round(pressure));
     }
 
     private static String formatDateTime(CompactCalendar time) {
-        String timeZonePreference = RouteConverter.getInstance().getTimeZonePreference();
-        return getDateTimeFormat(timeZonePreference).format(time.getTime());
-    }
-
-    private static String formatTime(CompactCalendar time) {
-        String timeZonePreference = RouteConverter.getInstance().getTimeZonePreference();
-        return getTimeFormat(timeZonePreference).format(time.getTime());
+        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
+        return getDateTimeFormat(timeZone.getString()).format(time.getTime());
     }
 
     public static String extractDateTime(NavigationPosition position) {
         CompactCalendar time = position.getTime();
         return time != null ? formatDateTime(time) : "";
+    }
+
+    public static String formatDate(CompactCalendar time, String timeZone) {
+        if(time == null)
+            return "?";
+        return getDateFormat(timeZone).format(time.getTime());
+    }
+
+    public static String formatDate(CompactCalendar time) {
+        return formatDate(time, RouteConverter.getInstance().getTimeZone().getString());
+    }
+
+    public static String extractDate(NavigationPosition position) {
+        CompactCalendar time = position.getTime();
+        return time != null ? formatDate(time) : "";
+    }
+
+    public static String formatTime(CompactCalendar time, String timeZone) {
+        if(time == null)
+            return "?";
+        return getTimeFormat(timeZone).format(time.getTime());
+    }
+
+    public static String formatTime(CompactCalendar time) {
+        return formatTime(time, RouteConverter.getInstance().getTimeZone().getString());
     }
 
     public static String extractTime(NavigationPosition position) {
@@ -159,18 +178,63 @@ public class PositionHelper {
         return fromDate(parsed);
     }
 
-    static CompactCalendar parseTime(String stringValue, String timeZonePreference) throws ParseException {
+    public static CompactCalendar parseDateTime(String stringValue) throws ParseException {
+        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
+        return parseDateTime(stringValue, timeZone.getString());
+    }
+
+    private static CompactCalendar parseDate(String stringValue, String timeZonePreference) throws ParseException {
+        Date parsed = getDateFormat(timeZonePreference).parse(stringValue);
+        return fromDate(parsed);
+    }
+
+    public static CompactCalendar parseDate(String stringValue) throws ParseException {
+        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
+        return parseDate(stringValue, timeZone.getString());
+    }
+
+    private static CompactCalendar parseTime(String stringValue, String timeZonePreference) throws ParseException {
         Date parsed = getTimeFormat(timeZonePreference).parse(stringValue);
         return fromDate(parsed);
     }
 
-    public static CompactCalendar parseDateTime(String stringValue) throws ParseException {
-        String timeZonePreference = RouteConverter.getInstance().getTimeZonePreference();
-        return parseDateTime(stringValue, timeZonePreference);
+    public static CompactCalendar parseTime(String stringValue) throws ParseException {
+        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
+        return parseTime(stringValue, timeZone.getString());
     }
 
-    public static CompactCalendar parseTime(String stringValue) throws ParseException {
-        String timeZonePreference = RouteConverter.getInstance().getTimeZonePreference();
-        return parseTime(stringValue, timeZonePreference);
+    private static long toNextUnit(Long size, long nextUnit) {
+        return round(size / (double) nextUnit + 0.5);
+    }
+
+    public static String formatSize(Long size) {
+        if(size == null)
+            return "?";
+
+        String unit;
+        if (size > 2 * MEGA_BYTE) {
+            size = toNextUnit(size, MEGA_BYTE);
+            unit = "MByte";
+        } else if (size > 2 * KILO_BYTE) {
+            size = toNextUnit(size, KILO_BYTE);
+            unit = "kByte";
+        } else {
+            unit = "Bytes";
+        }
+        return format("%d %s", size, unit);
+    }
+
+    public static File extractFile(NavigationPosition position) {
+        if (position instanceof Wgs84Position) {
+            Wgs84Position wgs84Position = (Wgs84Position) position;
+            WaypointType waypointType = wgs84Position.getWaypointType();
+            if (waypointType != null && (waypointType.equals(Photo) || waypointType.equals(Voice))) {
+                File file = wgs84Position.getOrigin(File.class);
+                if (file != null) {
+                    return file;
+                }
+            }
+        }
+        return null;
     }
 }

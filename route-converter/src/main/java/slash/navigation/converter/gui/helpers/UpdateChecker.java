@@ -32,11 +32,7 @@ import java.util.logging.Logger;
 
 import static java.lang.System.currentTimeMillis;
 import static java.text.MessageFormat.format;
-import static javax.swing.JOptionPane.INFORMATION_MESSAGE;
-import static javax.swing.JOptionPane.YES_NO_OPTION;
-import static javax.swing.JOptionPane.YES_OPTION;
-import static javax.swing.JOptionPane.showConfirmDialog;
-import static javax.swing.JOptionPane.showMessageDialog;
+import static javax.swing.JOptionPane.*;
 import static javax.swing.SwingUtilities.invokeLater;
 import static slash.common.io.Transfer.trim;
 import static slash.common.system.Version.parseVersionFromManifest;
@@ -82,7 +78,7 @@ public class UpdateChecker {
         UpdateResult result = new UpdateResult(myRouteConverterVersion, myJavaVersion);
         try {
             String parameters = routeFeedback.checkForUpdate(myRouteConverterVersion,
-                    parseVersionFromManifest().getBits(),
+                    RouteConverter.getInstance().getEditionId(),
                     getStartCount(),
                     myJavaVersion,
                     System.getProperty("sun.arch.data.model"),
@@ -93,21 +89,25 @@ public class UpdateChecker {
                     getStartTime());
             result.setParameters(parameters);
         } catch (Throwable t) {
-            log.severe("Cannot check for update: " + t.getMessage());
+            log.severe("Cannot check for update: " + t);
         }
         return result;
     }
 
     private void offerRouteConverterUpdate(Window window, UpdateResult result) {
         int confirm = showConfirmDialog(window,
-                format(RouteConverter.getBundle().getString("confirm-routeconverter-update"), result.getMyRouteConverterVersion(), result.getLatestRouteConverterVersion()),
+                format(RouteConverter.getBundle().getString("confirm-routeconverter-update"),
+                        result.getMyRouteConverterVersion(),
+                        RouteConverter.getInstance().getEditionName(),
+                        result.getLatestRouteConverterVersion()),
                 RouteConverter.getTitle(), YES_NO_OPTION);
         if (confirm == YES_OPTION)
             startBrowserForUpdateCheck(window, result.getMyRouteConverterVersion(), getStartTime());
     }
 
     private void noUpdateAvailable(Window window) {
-        showMessageDialog(window, format(RouteConverter.getBundle().getString("no-update-available")),
+        showMessageDialog(window, format(RouteConverter.getBundle().getString("no-update-available"),
+                RouteConverter.getInstance().getEditionName()),
                 RouteConverter.getTitle(), INFORMATION_MESSAGE);
     }
 
@@ -163,7 +163,7 @@ public class UpdateChecker {
 
         private final String myRouteConverterVersion;
         private final String myJavaVersion;
-        private Map<String, String> parameters = new HashMap<String, String>();
+        private Map<String, String> parameters = new HashMap<>();
 
         public UpdateResult(String myRouteConverterVersion, String myJavaVersion) {
             this.myRouteConverterVersion = myRouteConverterVersion;
@@ -209,7 +209,7 @@ public class UpdateChecker {
 
         private Map<String, String> parseParameters(String parameters) {
             StringTokenizer tokenizer = new StringTokenizer(parameters, ",");
-            Map<String, String> map = new HashMap<String, String>();
+            Map<String, String> map = new HashMap<>();
             while (tokenizer.hasMoreTokens()) {
                 String nv = tokenizer.nextToken();
                 StringTokenizer nvTokenizer = new StringTokenizer(nv, "=");

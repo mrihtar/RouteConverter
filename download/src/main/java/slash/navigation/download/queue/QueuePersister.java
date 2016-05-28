@@ -19,20 +19,16 @@
 */
 package slash.navigation.download.queue;
 
-import slash.common.type.CompactCalendar;
 import slash.navigation.download.*;
 import slash.navigation.download.queue.binding.*;
 
 import javax.xml.bind.JAXBException;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static slash.common.io.Transfer.formatTime;
-import static slash.common.io.Transfer.parseTime;
+import static slash.common.io.Transfer.formatXMLTime;
+import static slash.common.io.Transfer.parseXMLTime;
 import static slash.navigation.download.queue.QueueUtil.marshal;
 import static slash.navigation.download.queue.QueueUtil.unmarshal;
 
@@ -49,30 +45,23 @@ public class QueuePersister {
             return null;
 
         QueueType queueType;
-        try {
-            queueType = unmarshal(new FileInputStream(file));
+        try (InputStream inputStream = new FileInputStream(file)) {
+            queueType = unmarshal(inputStream);
         } catch (JAXBException e) {
-            e.printStackTrace();
             throw new IOException("Cannot unmarshall " + file + ": " + e, e);
         }
-        return new Result(asDownloads(queueType), parseTime(queueType.getLastSync()));
+        return new Result(asDownloads(queueType));
     }
 
     public static class Result {
-        private final CompactCalendar lastSync;
         private final List<Download> downloads;
 
-        public Result(List<Download> downloads, CompactCalendar lastSync) {
+        public Result(List<Download> downloads) {
             this.downloads = downloads;
-            this.lastSync = lastSync;
         }
 
         public List<Download> getDownloads() {
             return downloads;
-        }
-
-        public CompactCalendar getLastSync() {
-            return lastSync;
         }
     }
 
@@ -101,12 +90,11 @@ public class QueuePersister {
         if(checksumType == null)
             return null;
 
-        return new Checksum(parseTime(checksumType.getLastModified()), checksumType.getContentLength(), checksumType.getSha1());
+        return new Checksum(parseXMLTime(checksumType.getLastModified()), checksumType.getContentLength(), checksumType.getSha1());
     }
 
-    public void save(File file, List<Download> downloads, CompactCalendar lastSync) throws IOException {
+    public void save(File file, List<Download> downloads) throws IOException {
         QueueType queueType = asQueueType(downloads);
-        queueType.setLastSync(formatTime(lastSync));
         try {
             marshal(queueType, new FileOutputStream(file));
         } catch (JAXBException e) {
@@ -150,7 +138,7 @@ public class QueuePersister {
 
         ChecksumType checksumType = new ObjectFactory().createChecksumType();
         checksumType.setContentLength(checksum.getContentLength());
-        checksumType.setLastModified(formatTime(checksum.getLastModified(), true));
+        checksumType.setLastModified(formatXMLTime(checksum.getLastModified(), true));
         checksumType.setSha1(checksum.getSHA1());
         return checksumType;
     }

@@ -31,8 +31,7 @@ import java.util.logging.Logger;
 
 import static java.lang.String.format;
 import static java.util.logging.Logger.getLogger;
-import static slash.common.io.Files.generateChecksum;
-import static slash.common.type.CompactCalendar.fromMillis;
+import static slash.navigation.download.Checksum.createChecksum;
 
 /**
  * Validates a {@link Download}
@@ -43,43 +42,83 @@ import static slash.common.type.CompactCalendar.fromMillis;
 public class Validator {
     private static final Logger log = getLogger(Validator.class.getName());
     private final Download download;
+    private boolean calculatedChecksums = false;
+    private Boolean existsTargets, checksumsValid;
 
     public Validator(Download download) {
         this.download = download;
     }
 
-    private Checksum createChecksum(File file) throws IOException {
-        return new Checksum(fromMillis(file.lastModified()), file.length(), generateChecksum(file));
+    public boolean isExistsTargets() {
+        determineExistTargets();
+        return existsTargets;
     }
 
-    public void validate() throws IOException {
-        if (!existTargets())
-            return;
-
-        download.getFile().setActualChecksum(createChecksum(getFileTarget()));
-        List<FileAndChecksum> fragments = download.getFragments();
-        if (fragments != null) {
-            for (FileAndChecksum fragment : fragments) {
-                fragment.setActualChecksum(createChecksum(fragment.getFile()));
-            }
-        }
+    public boolean isChecksumsValid() throws IOException {
+        determineChecksumsValid();
+        return checksumsValid;
     }
+
 
     private File getFileTarget() {
         File file = download.getFile().getFile();
         return file.isFile() ? file : download.getTempFile();
     }
 
+    private void determineExistTargets() {
+        if (existsTargets != null)
+            return;
+
+        existsTargets = true;
+
+        if (!download.getFile().getFile().exists()) {
+            log.warning(format("%s does not exist", download.getFile()));
+            existsTargets = false;
+        }
+
+        List<FileAndChecksum> fragments = download.getFragments();
+        if (fragments != null) {
+            for (FileAndChecksum fragment : fragments) {
+                if (!fragment.getFile().exists()) {
+                    log.warning(format("%s does not exist", fragment));
+                    existsTargets = false;
+                }
+            }
+        }
+    }
+
+    public void calculateChecksums() throws IOException {
+        if (calculatedChecksums)
+            return;
+
+        download.getFile().setActualChecksum(createChecksum(getFileTarget()));
+        List<FileAndChecksum> fragments = download.getFragments();
+        if (fragments != null)
+            for (FileAndChecksum fragment : fragments)
+                fragment.setActualChecksum(createChecksum(fragment.getFile()));
+
+        calculatedChecksums = true;
+    }
+
     private boolean isChecksumValid(FileAndChecksum file) throws IOException {
+        if (file.getFile().isDirectory())
+            return true;
+
         Checksum expected = file.getExpectedChecksum();
         if (expected == null)
             return true;
 
         Checksum actual = file.getActualChecksum();
+        if (actual == null)
+            return false;
+
         boolean lastModifiedEquals = expected.getLastModified() == null ||
                 expected.getLastModified().equals(actual.getLastModified());
         if (!lastModifiedEquals)
             log.warning(format("%s has last modified %s but expected %s", file.getFile(), actual.getLastModified(), expected.getLastModified()));
+        boolean hasBeenUpdatedByMe = file.getActualChecksum().laterThan(file.getExpectedChecksum());
+        if (hasBeenUpdatedByMe)
+            log.info(format("%s has been updated by me on server", file.getFile()));
         boolean contentLengthEquals = expected.getContentLength() == null ||
                 expected.getContentLength().equals(actual.getContentLength());
         if (!contentLengthEquals)
@@ -88,35 +127,36 @@ public class Validator {
                 expected.getSHA1().equals(actual.getSHA1());
         if (!sha1Equals)
             log.warning(format("%s has SHA-1 %s but expected %s", file.getFile(), actual.getSHA1(), expected.getSHA1()));
-        // TODO solve timezone problems first before making lastModifiedEquals relevant again
-        boolean valid = /*lastModifiedEquals &&*/ contentLengthEquals && sha1Equals;
+        boolean valid = lastModifiedEquals && contentLengthEquals && sha1Equals || hasBeenUpdatedByMe;
         if (valid)
             log.info(format("%s has valid checksum", file.getFile()));
         return valid;
     }
 
-    public boolean isChecksumValid() throws IOException {
-        if (!isChecksumValid(download.getFile()))
-            return false;
+    private void determineChecksumsValid() throws IOException {
+        if (checksumsValid != null)
+            return;
+
+        calculateChecksums();
+
+        if (!isChecksumValid(download.getFile())) {
+            checksumsValid = false;
+            return;
+        }
 
         List<FileAndChecksum> fragments = download.getFragments();
         if (fragments != null)
-            for (FileAndChecksum fragment : fragments) {
-                if (!isChecksumValid(fragment))
-                    return false;
-            }
-        return true;
+            for (FileAndChecksum fragment : fragments)
+                if (!isChecksumValid(fragment)) {
+                    checksumsValid = false;
+                    return;
+                }
+        checksumsValid = true;
     }
 
-    public boolean existTargets() {
-        if (!download.getFile().getFile().exists())
-            return false;
-        List<FileAndChecksum> fragments = download.getFragments();
-        if (fragments != null)
-            for (FileAndChecksum fragment : fragments) {
-                if (!fragment.getFile().exists())
-                    return false;
-            }
-        return true;
+    public void expectedChecksumIsCurrentChecksum() throws IOException {
+        calculateChecksums();
+
+        download.getFile().setExpectedChecksum(download.getFile().getActualChecksum());
     }
 }

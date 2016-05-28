@@ -20,17 +20,20 @@
 package slash.navigation.gui.notifications;
 
 import slash.navigation.gui.Application;
-import slash.navigation.gui.SingleFrameApplication;
 
 import javax.swing.*;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 import static java.lang.System.currentTimeMillis;
+import static javax.swing.BorderFactory.createEtchedBorder;
 import static slash.common.helpers.ThreadHelper.invokeInAwtEventQueue;
 import static slash.common.helpers.ThreadHelper.safeJoin;
+import static slash.navigation.gui.helpers.UIHelper.getFrame;
 
 /**
  * Manages the notifications of an {@link Application}.
@@ -39,7 +42,7 @@ import static slash.common.helpers.ThreadHelper.safeJoin;
  */
 
 public class NotificationManager {
-    private static final int DISPLAY_TIMEOUT = 5 * 1000;
+    private static final int DISPLAY_TIMEOUT = 2 * 1000;
 
     private JWindow window;
     private JLabel label = new JLabel();
@@ -56,7 +59,7 @@ public class NotificationManager {
         label.setFont(label.getFont().deriveFont(13f));
         label.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
-                if(nextAction != null)
+                if (nextAction != null)
                     nextAction.actionPerformed(new ActionEvent(e, 4711, "notify"));
             }
         });
@@ -65,7 +68,7 @@ public class NotificationManager {
         JPanel contentPane = (JPanel) window.getContentPane();
         contentPane.add(label);
         contentPane.setBackground(new Color(0, 7 * 16 + 9, 13 * 16));
-        contentPane.setBorder(BorderFactory.createEtchedBorder());
+        contentPane.setBorder(new CompoundBorder(createEtchedBorder(), new EmptyBorder(2, 3, 2, 3)));
 
         initializeNotificationUpdater();
     }
@@ -75,24 +78,21 @@ public class NotificationManager {
             public void run() {
                 while (true) {
                     synchronized (notificationMutex) {
-                        try {
-                            notificationMutex.wait(1000);
-                        } catch (InterruptedException e) {
-                            // intentionally left empty
-                        }
-
                         if (!running)
                             break;
-                        else if (nextMessage != null) {
+
+                        if (nextMessage != null) {
                             final String showMessage = nextMessage;
                             nextMessage = null;
                             lastEvent = currentTimeMillis();
 
-                            invokeInAwtEventQueue(new Runnable() {
-                                public void run() {
-                                    show(showMessage);
-                                }
-                            });
+                            if (!label.getText().equals(showMessage)) {
+                                invokeInAwtEventQueue(new Runnable() {
+                                    public void run() {
+                                        show(showMessage);
+                                    }
+                                });
+                            }
                         } else if (currentTimeMillis() - lastEvent > DISPLAY_TIMEOUT) {
                             invokeInAwtEventQueue(new Runnable() {
                                 public void run() {
@@ -101,22 +101,25 @@ public class NotificationManager {
                             });
                         }
                     }
+
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        // intentionally left empty
+                    }
                 }
             }
         }, "NotificationUpdater");
         notificationUpdater.start();
     }
 
-    private JFrame getFrame() {
-        Application application = Application.getInstance();
-        if (!(application instanceof SingleFrameApplication))
-            return null;
-        return ((SingleFrameApplication) application).getFrame();
-    }
-
     private void show(String message) {
         label.setText(message);
-        Point locationOnScreen = getFrame().getLocationOnScreen();
+        JFrame frame = getFrame();
+        if(frame == null)
+            return;
+
+        Point locationOnScreen = frame.getLocationOnScreen();
         Dimension frameSize = getFrame().getSize();
         window.pack();
         window.setLocation(locationOnScreen.x + frameSize.width - label.getWidth() - 25,
@@ -126,6 +129,7 @@ public class NotificationManager {
 
     private void hide() {
         window.setVisible(false);
+        label.setText("");
     }
 
     public void showNotification(String message, Action action) {

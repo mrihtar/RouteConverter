@@ -85,6 +85,7 @@ public class RouteCalculations {
             return douglasPeuckerSimplify(positions, 0, positions.size() - 1, threshold);
     }
 
+    @SuppressWarnings("unused")
     public static CompactCalendar extrapolateTime(NavigationPosition position, NavigationPosition predecessor, NavigationPosition beforePredecessor) {
         if (!predecessor.hasTime() || !beforePredecessor.hasTime())
             return null;
@@ -102,7 +103,7 @@ public class RouteCalculations {
         return fromMillis(time);
     }
 
-    public static CompactCalendar intrapolateTime(NavigationPosition position, NavigationPosition predecessor, NavigationPosition successor) {
+    public static CompactCalendar interpolateTime(NavigationPosition position, NavigationPosition predecessor, NavigationPosition successor) {
         if (!predecessor.hasTime() || !successor.hasTime())
             return null;
 
@@ -121,7 +122,7 @@ public class RouteCalculations {
         return fromMillis(time);
     }
 
-    public static Wgs84Position asWgs84Position(double longitude, double latitude) {
+    public static Wgs84Position asWgs84Position(Double longitude, Double latitude) {
         return asWgs84Position(longitude, latitude, null);
     }
 
