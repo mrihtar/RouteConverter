@@ -25,6 +25,7 @@ import slash.navigation.gui.Application;
 import slash.navigation.maps.LocalMap;
 import slash.navigation.maps.LocalTheme;
 import slash.navigation.maps.MapManager;
+import slash.navigation.maps.impl.OnlineMap;
 import slash.navigation.mapview.mapsforge.models.JoinedListComboBoxModel;
 import slash.navigation.mapview.mapsforge.models.TableModelToComboBoxModelAdapter;
 import slash.navigation.mapview.mapsforge.renderer.MapListCellRenderer;
@@ -36,7 +37,10 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.util.ResourceBundle;
 
-import static com.intellij.uiDesigner.core.GridConstraints.*;
+import static com.intellij.uiDesigner.core.GridConstraints.ANCHOR_CENTER;
+import static com.intellij.uiDesigner.core.GridConstraints.FILL_BOTH;
+import static com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_GROW;
+import static com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK;
 import static java.awt.event.ItemEvent.SELECTED;
 import static java.lang.Integer.MAX_VALUE;
 import static java.util.Arrays.asList;
@@ -66,27 +70,29 @@ public class MapSelector {
         mapViewPanel.add(mapView, MAP_SELECTOR_CONSTRAINTS);
 
         comboBoxMap.setModel(new JoinedListComboBoxModel<>(
-                        new TableModelToComboBoxModelAdapter<>(mapManager.getAvailableMapsModel(), mapManager.getDisplayedMapModel()),
-                        asList(SEPARATOR_TO_DOWNLOAD_MAP, DOWNLOAD_MAP))
+                new TableModelToComboBoxModelAdapter<>(mapManager.getAvailableMapsModel(), mapManager.getDisplayedMapModel()),
+                asList(SEPARATOR_TO_DOWNLOAD_MAP, DOWNLOAD_MAP))
         );
-        comboBoxMap.setPrototypeDisplayValue(mapManager.getAvailableMapsModel().getMap(1));
+        comboBoxMap.setPrototypeDisplayValue(new OnlineMap("Map", "http://mal.url", null));
         comboBoxMap.setRenderer(new MapListCellRenderer());
         comboBoxMap.addItemListener(new ItemListener() {
             public void itemStateChanged(ItemEvent e) {
-                if (e.getStateChange() != SELECTED)
+                if (e.getStateChange() != SELECTED) {
                     return;
+                }
                 LocalMap map = (LocalMap) e.getItem();
                 comboBoxTheme.setEnabled(map.isVector());
             }
         });
 
         comboBoxTheme.setModel(new JoinedListComboBoxModel<>(
-                        new TableModelToComboBoxModelAdapter<>(mapManager.getAvailableThemesModel(), mapManager.getAppliedThemeModel()),
-                        asList(SEPARATOR_TO_DOWNLOAD_THEME, DOWNLOAD_THEME))
+                new TableModelToComboBoxModelAdapter<>(mapManager.getAvailableThemesModel(), mapManager.getAppliedThemeModel()),
+                asList(SEPARATOR_TO_DOWNLOAD_THEME, DOWNLOAD_THEME))
         );
         comboBoxTheme.setPrototypeDisplayValue(mapManager.getAvailableThemesModel().getTheme(0));
         comboBoxTheme.setRenderer(new ThemeListCellRenderer());
-        comboBoxTheme.setEnabled(((LocalMap) comboBoxMap.getSelectedItem()).isVector());
+        LocalMap selectedItem = (LocalMap) comboBoxMap.getSelectedItem();
+        comboBoxTheme.setEnabled(selectedItem != null && selectedItem.isVector());
     }
 
     public void zoomChanged(int zoomLevel) {

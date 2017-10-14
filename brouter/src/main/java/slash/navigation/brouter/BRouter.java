@@ -20,10 +20,7 @@
 package slash.navigation.brouter;
 
 import btools.router.*;
-import slash.navigation.common.BoundingBox;
-import slash.navigation.common.LongitudeAndLatitude;
-import slash.navigation.common.NavigationPosition;
-import slash.navigation.common.SimpleNavigationPosition;
+import slash.navigation.common.*;
 import slash.navigation.datasources.DataSource;
 import slash.navigation.datasources.Downloadable;
 import slash.navigation.download.Action;
@@ -84,11 +81,11 @@ public class BRouter implements RoutingService {
         return getProfiles() != null && getSegments() != null;
     }
 
-    public synchronized DataSource getProfiles() {
+    private synchronized DataSource getProfiles() {
         return profiles;
     }
 
-    public synchronized DataSource getSegments() {
+    private synchronized DataSource getSegments() {
         return segments;
     }
 
@@ -125,7 +122,7 @@ public class BRouter implements RoutingService {
             }
         });
         if (files != null) {
-            for(File file : files) {
+            for (File file : files) {
                 result.add(new TravelMode(removeExtension(file.getName())));
             }
         }
@@ -186,7 +183,8 @@ public class BRouter implements RoutingService {
                 latitude < 0 ? -latitudeAsInteger : latitudeAsInteger);
     }
 
-    public RoutingResult getRouteBetween(NavigationPosition from, NavigationPosition to, TravelMode travelMode) {
+    // TODO synchronized since BRouter is not thread-safe the way I'm calling it now
+    public synchronized RoutingResult getRouteBetween(NavigationPosition from, NavigationPosition to, TravelMode travelMode) {
         long start = currentTimeMillis();
         try {
             File profile = new File(getProfilesDirectory(), travelMode.getName() + ".brf");
@@ -198,7 +196,7 @@ public class BRouter implements RoutingService {
                 List<TravelMode> availableTravelModes = getAvailableTravelModes();
                 if (availableTravelModes.size() == 0) {
                     log.warning(format("Cannot route between %s and %s: no travel modes found in %s", from, to, getProfilesDirectory()));
-                    return new RoutingResult(asList(from, to), calculateBearing(from.getLongitude(), from.getLatitude(), to.getLongitude(), to.getLatitude()).getDistance(), 0L, false);
+                    return new RoutingResult(asList(from, to), new DistanceAndTime(calculateBearing(from.getLongitude(), from.getLatitude(), to.getLongitude(), to.getLatitude()).getDistance(), null), false);
                 }
 
                 TravelMode firstTravelMode = availableTravelModes.get(0);
@@ -207,21 +205,21 @@ public class BRouter implements RoutingService {
             }
             routingContext.localFunction = profile.getPath();
 
+            double bearing = Bearing.calculateBearing(from.getLongitude(), from.getLatitude(),
+                    to.getLongitude(), to.getLatitude()).getDistance();
+            long routingTimeout = (long) (1000L + bearing / 20.0);
+            log.info(format("Distance %f results to default routing timeout %d milliseconds", bearing, routingTimeout));
+
             RoutingEngine routingEngine = new RoutingEngine(null, null, getSegmentsDirectory().getPath(), createWaypoints(from, to), routingContext);
             routingEngine.quite = true;
-            routingEngine.doRun(preferences.getLong("routingTimeout", 1000L));
-            if (routingEngine.getErrorMessage() != null) {
-                // TODO handle routing timeouts differently
-                log.warning(format("Cannot route between %s and %s: %s", from, to, routingEngine.getErrorMessage()));
-                return new RoutingResult(asList(from, to), calculateBearing(from.getLongitude(), from.getLatitude(), to.getLongitude(), to.getLatitude()).getDistance(), 0L, false);
-            }
+            routingEngine.doRun(preferences.getLong("routingTimeout", routingTimeout));
+
+            if (routingEngine.getErrorMessage() != null)
+                log.severe(format("Error while routing between %s and %s: %s", from, to, routingEngine.getErrorMessage()));
 
             OsmTrack track = routingEngine.getFoundTrack();
-            int distance = routingEngine.getDistance();
-            return new RoutingResult(asPositions(track), distance, 0L, true);
-        } catch (Exception e) {
-            log.warning(format("Exception while routing between %s and %s: %s", from, to, e));
-            return new RoutingResult(asList(from, to), calculateBearing(from.getLongitude(), from.getLatitude(), to.getLongitude(), to.getLatitude()).getDistance(), 0L, false);
+            double distance = routingEngine.getDistance();
+            return new RoutingResult(asPositions(track), new DistanceAndTime(distance, null), routingEngine.getErrorMessage() == null);
         } finally {
             long end = currentTimeMillis();
             log.info("BRouter: routing from " + from + " to " + to + " took " + (end - start) + " milliseconds");
@@ -274,7 +272,7 @@ public class BRouter implements RoutingService {
         }
 
         final Collection<Downloadable> notExistingSegments = new HashSet<>();
-        if(isInitialized()) {
+        if (isInitialized()) {
             for (String key : uris) {
                 Downloadable downloadable = getSegments().getDownloadable(key);
                 if (downloadable != null) {
@@ -296,13 +294,17 @@ public class BRouter implements RoutingService {
             public boolean isRequiresDownload() {
                 return !notExistingProfiles.isEmpty() || !notExistingSegments.isEmpty();
             }
+
             public boolean isRequiresProcessing() {
                 return false;
             }
+
             public void download() {
                 downloadAndWait(notExistingProfiles, notExistingSegments);
             }
-            public void process() {}
+
+            public void process() {
+            }
         };
     }
 
@@ -361,13 +363,13 @@ public class BRouter implements RoutingService {
     public long calculateRemainingDownloadSize(List<BoundingBox> boundingBoxes) {
         Collection<Downloadable> downloadables = getDownloadablesFor(boundingBoxes);
         long notExists = 0L;
-        for(Downloadable downloadable : downloadables) {
+        for (Downloadable downloadable : downloadables) {
             Long contentLength = downloadable.getLatestChecksum().getContentLength();
-            if(contentLength == null)
+            if (contentLength == null)
                 continue;
 
             java.io.File file = createSegmentFile(downloadable.getUri());
-            if(!file.exists())
+            if (!file.exists())
                 notExists += contentLength;
         }
         return notExists;
@@ -375,7 +377,7 @@ public class BRouter implements RoutingService {
 
     public void downloadRoutingData(List<BoundingBox> boundingBoxes) {
         Collection<Downloadable> downloadables = getDownloadablesFor(boundingBoxes);
-        for(Downloadable downloadable : downloadables) {
+        for (Downloadable downloadable : downloadables) {
             downloadSegment(downloadable);
         }
     }

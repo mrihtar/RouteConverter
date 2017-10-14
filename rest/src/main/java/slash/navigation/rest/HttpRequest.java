@@ -30,22 +30,30 @@ import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.conn.HttpClientConnectionManager;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicHttpResponse;
+import slash.navigation.rest.ssl.SSLConnectionManagerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.URI;
 import java.util.List;
 import java.util.logging.Logger;
 
 import static java.lang.String.format;
+import static java.net.Proxy.NO_PROXY;
+import static java.net.Proxy.Type.DIRECT;
 import static java.util.Arrays.asList;
 import static org.apache.http.HttpStatus.SC_BAD_REQUEST;
 import static org.apache.http.HttpStatus.SC_FORBIDDEN;
@@ -57,6 +65,7 @@ import static org.apache.http.HttpStatus.SC_PARTIAL_CONTENT;
 import static org.apache.http.HttpStatus.SC_PRECONDITION_FAILED;
 import static org.apache.http.HttpStatus.SC_UNAUTHORIZED;
 import static org.apache.http.HttpVersion.HTTP_1_1;
+import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
 import static slash.common.io.InputOutput.readBytes;
 import static slash.common.io.Transfer.UTF8_ENCODING;
 
@@ -67,7 +76,6 @@ import static slash.common.io.Transfer.UTF8_ENCODING;
  */
 
 public abstract class HttpRequest {
-    public static final String APPLICATION_XML = "application/xml";
     public static final String APPLICATION_JSON = "application/json";
     public static final String USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36";
 
@@ -84,6 +92,12 @@ public abstract class HttpRequest {
         requestConfigBuilder.setConnectTimeout(15 * 1000);
         requestConfigBuilder.setSocketTimeout(90 * 1000);
         clientBuilder.setRetryHandler(new DefaultHttpRequestRetryHandler(0, false));
+        try {
+            HttpClientConnectionManager connectionManager = new SSLConnectionManagerFactory().createConnectionManager();
+            clientBuilder.setConnectionManager(connectionManager);
+        } catch (Exception e) {
+            log.severe("Cannot create SSL connection manager that supports letsencrypt root certificate: " + getLocalizedMessage(e));
+        }
         setUserAgent("RouteConverter REST Client/" + System.getProperty("rest", "1.8"));
         this.method = method;
     }
@@ -112,7 +126,7 @@ public abstract class HttpRequest {
 
     private void setAuthentication(Credentials credentials) {
         URI uri = method.getURI();
-        setAuthentication(credentials.getUserName(), credentials.getPassword(), new AuthScope(uri.getHost(), uri.getPort(), "Restricted Access"));
+        setAuthentication(credentials.getUserName(), credentials.getPassword(), new AuthScope(uri.getHost(), uri.getPort(), "api"));
     }
 
     public void setUserAgent(String userAgent) {
@@ -135,8 +149,31 @@ public abstract class HttpRequest {
         return false;
     }
 
+    private Proxy findProxy(URI uri) {
+        try {
+            ProxySelector selector = ProxySelector.getDefault();
+            List<Proxy> proxyList = selector.select(uri);
+            if (proxyList.size() > 0)
+                return proxyList.get(0);
+        } catch (IllegalArgumentException e) {
+            log.severe("Exception while finding proxy for " + uri + ": " + getLocalizedMessage(e));
+        }
+        return NO_PROXY;
+    }
+
     protected HttpResponse execute() throws IOException {
-        clientBuilder.setDefaultRequestConfig(requestConfigBuilder.build());
+        Proxy proxy = findProxy(method.getURI());
+        if(proxy != NO_PROXY && !proxy.type().equals(DIRECT)) {
+            SocketAddress address = proxy.address();
+            if(address instanceof InetSocketAddress) {
+                InetSocketAddress inetSocketAddress = (InetSocketAddress) address;
+                requestConfigBuilder.setProxy(new HttpHost(inetSocketAddress.getHostName(), inetSocketAddress.getPort()));
+                log.info(format("Using proxy %s for %s", proxy.toString(), method.getURI()));
+            }
+        }
+
+        RequestConfig requestConfig = requestConfigBuilder.build();
+        clientBuilder.setDefaultRequestConfig(requestConfig);
         try {
             return clientBuilder.build().execute(method, context);
         } catch (SocketException e) {

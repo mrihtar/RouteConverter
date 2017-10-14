@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static slash.common.io.Transfer.isEmpty;
 import static slash.common.io.Transfer.parseDouble;
 import static slash.common.io.Transfer.parseLong;
 import static slash.common.type.CompactCalendar.fromMillis;
@@ -35,7 +36,7 @@ import static slash.navigation.base.RouteCharacteristics.Track;
 
 /**
  * Reads ape@map (.trk) files.
- * <p/>
+ *
  * [track]
  * (47.14454650878906,15.500686645507813)
  * (47.13923645019531,15.501678466796875)
@@ -107,7 +108,7 @@ public class ApeMapFormat extends SimpleLineBasedFormat<SimpleRoute> {
 
     private CompactCalendar parseTime(String time) {
         Long milliseconds = parseLong(time);
-        if (milliseconds == null || milliseconds == 0)
+        if (isEmpty(milliseconds))
             return null;
         return fromMillis(milliseconds * 1000);
     }

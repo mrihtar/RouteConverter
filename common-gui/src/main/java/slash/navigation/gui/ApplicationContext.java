@@ -42,10 +42,10 @@ public class ApplicationContext {
     private ResourceBundle bundle;
     private ActionManager actionManager = new ActionManager();
     private UndoManager undoManager = new UndoManager();
-    private NotificationManager notificationManager = new NotificationManager();
-    private JMenuBar menuBar = null;
-    private HelpBroker broker = null;
-    private String helpBrokerUrl = null;
+    private NotificationManager notificationManager;
+    private JMenuBar menuBar;
+    private HelpBroker broker;
+    private String helpBrokerUrl;
 
     public ResourceBundle getBundle() {
         return bundle;
@@ -64,6 +64,8 @@ public class ApplicationContext {
     }
 
     public NotificationManager getNotificationManager() {
+        if (notificationManager == null)
+            notificationManager = new NotificationManager();
         return notificationManager;
     }
 

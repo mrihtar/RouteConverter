@@ -46,9 +46,13 @@ public class RouteCalculations {
         for (int i = from + 1; i < to; i++) {
             NavigationPosition position = positions.get(i);
             if (position.hasCoordinates()) {
-                double distance = abs(position.calculateOrthogonalDistance(pointA, pointB));
-                if (distance > maximumDistance) {
-                    maximumDistance = distance;
+                Double distance = position.calculateOrthogonalDistance(pointA, pointB);
+                if (distance == null)
+                    continue;
+
+                double absDistance = abs(distance);
+                if (absDistance > maximumDistance) {
+                    maximumDistance = absDistance;
                     maximumDistanceIndex = i;
                 }
             }
@@ -69,7 +73,7 @@ public class RouteCalculations {
 
     /**
      * Search the significant positions with the Douglas-Peucker-Algorithm.
-     * <p/>
+     *
      * http://de.wikipedia.org/wiki/Douglas-Peucker-Algorithmus
      *
      * @param positions the original list of positions
@@ -103,6 +107,7 @@ public class RouteCalculations {
         return fromMillis(time);
     }
 
+    @SuppressWarnings("unused")
     public static CompactCalendar interpolateTime(NavigationPosition position, NavigationPosition predecessor, NavigationPosition successor) {
         if (!predecessor.hasTime() || !successor.hasTime())
             return null;

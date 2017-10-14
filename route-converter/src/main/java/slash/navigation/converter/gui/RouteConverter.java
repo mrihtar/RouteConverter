@@ -21,6 +21,7 @@ package slash.navigation.converter.gui;
 
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
+import slash.common.helpers.APIKeyRegistry;
 import slash.common.log.LoggingHelper;
 import slash.common.system.Version;
 import slash.navigation.babel.BabelException;
@@ -28,6 +29,7 @@ import slash.navigation.base.NavigationFormatRegistry;
 import slash.navigation.base.RouteCharacteristics;
 import slash.navigation.columbus.ColumbusV1000Device;
 import slash.navigation.common.BoundingBox;
+import slash.navigation.common.DistanceAndTime;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.common.NumberPattern;
 import slash.navigation.common.NumberingStrategy;
@@ -49,12 +51,14 @@ import slash.navigation.converter.gui.dnd.PanelDropHandler;
 import slash.navigation.converter.gui.helpers.ApplicationMenu;
 import slash.navigation.converter.gui.helpers.AudioPlayer;
 import slash.navigation.converter.gui.helpers.AutomaticElevationService;
+import slash.navigation.converter.gui.helpers.AutomaticGeocodingService;
 import slash.navigation.converter.gui.helpers.ChecksumSender;
 import slash.navigation.converter.gui.helpers.DownloadNotifier;
 import slash.navigation.converter.gui.helpers.ElevationServiceFacade;
 import slash.navigation.converter.gui.helpers.FrameMenu;
 import slash.navigation.converter.gui.helpers.GeoTagger;
-import slash.navigation.converter.gui.helpers.GoogleDirectionsService;
+import slash.navigation.converter.gui.helpers.GeocodingServiceFacade;
+import slash.navigation.converter.gui.helpers.GoogleDirections;
 import slash.navigation.converter.gui.helpers.InsertPositionFacade;
 import slash.navigation.converter.gui.helpers.MapViewCallbackImpl;
 import slash.navigation.converter.gui.helpers.MapViewImplementation;
@@ -70,7 +74,7 @@ import slash.navigation.converter.gui.models.ColorModel;
 import slash.navigation.converter.gui.models.FixMapModeModel;
 import slash.navigation.converter.gui.models.GoogleMapsServerModel;
 import slash.navigation.converter.gui.models.ProfileModeModel;
-import slash.navigation.converter.gui.models.StringModel;
+import slash.navigation.converter.gui.models.TimeZoneModel;
 import slash.navigation.converter.gui.models.UnitSystemModel;
 import slash.navigation.converter.gui.models.UrlDocument;
 import slash.navigation.converter.gui.panels.BrowsePanel;
@@ -88,7 +92,7 @@ import slash.navigation.download.DownloadManager;
 import slash.navigation.download.FileAndChecksum;
 import slash.navigation.feedback.domain.RouteFeedback;
 import slash.navigation.geonames.GeoNamesService;
-import slash.navigation.googlemaps.GoogleMapsService;
+import slash.navigation.googlemaps.GoogleService;
 import slash.navigation.gui.Application;
 import slash.navigation.gui.SingleFrameApplication;
 import slash.navigation.gui.actions.ActionManager;
@@ -101,13 +105,14 @@ import slash.navigation.hgt.HgtFilesService;
 import slash.navigation.mapview.AbstractMapViewListener;
 import slash.navigation.mapview.MapView;
 import slash.navigation.mapview.MapViewCallback;
+import slash.navigation.nominatim.NominatimService;
+import slash.navigation.photon.PhotonService;
 import slash.navigation.rest.Credentials;
 import slash.navigation.routing.RoutingService;
 
 import javax.swing.*;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.xml.bind.UnmarshalException;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -117,8 +122,6 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -140,6 +143,7 @@ import static com.intellij.uiDesigner.core.GridConstraints.SIZEPOLICY_CAN_SHRINK
 import static java.awt.event.KeyEvent.VK_F1;
 import static java.awt.event.KeyEvent.VK_HELP;
 import static java.lang.Integer.MAX_VALUE;
+import static java.lang.String.format;
 import static java.util.Arrays.asList;
 import static java.util.Locale.CHINA;
 import static java.util.Locale.FRANCE;
@@ -156,6 +160,7 @@ import static javax.swing.JSplitPane.DIVIDER_LOCATION_PROPERTY;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static javax.swing.SwingUtilities.invokeLater;
 import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
 import static slash.common.helpers.LocaleHelper.CROATIA;
 import static slash.common.helpers.LocaleHelper.CZECH;
 import static slash.common.helpers.LocaleHelper.DENMARK;
@@ -169,7 +174,6 @@ import static slash.common.helpers.LocaleHelper.SPAIN;
 import static slash.common.io.Directories.getApplicationDirectory;
 import static slash.common.io.Files.findExistingPath;
 import static slash.common.io.Files.printArrayToDialogString;
-import static slash.common.io.Files.recursiveDelete;
 import static slash.common.io.Files.shortenPath;
 import static slash.common.io.Files.toUrls;
 import static slash.common.system.Platform.getJava;
@@ -188,7 +192,7 @@ import static slash.navigation.converter.gui.helpers.MapViewImplementation.Eclip
 import static slash.navigation.converter.gui.helpers.MapViewImplementation.JavaFX7;
 import static slash.navigation.converter.gui.helpers.MapViewImplementation.JavaFX8;
 import static slash.navigation.converter.gui.helpers.TagStrategy.Create_Backup_In_Subdirectory;
-import static slash.navigation.converter.gui.models.LocalNames.POSITIONS;
+import static slash.navigation.converter.gui.models.LocalActionConstants.POSITIONS;
 import static slash.navigation.datasources.DataSourceManager.FORMAT_XML;
 import static slash.navigation.datasources.DataSourceManager.V1;
 import static slash.navigation.download.Action.Copy;
@@ -224,10 +228,14 @@ public class RouteConverter extends SingleFrameApplication {
 
     public static String getTitle() {
         Version version = parseVersionFromManifest();
-        return MessageFormat.format(getBundle().getString("title"), RouteConverter.getInstance().getEditionName(), version.getVersion(), version.getDate());
+        return MessageFormat.format(getBundle().getString("title"), RouteConverter.getInstance().getEdition(), version.getVersion(), version.getDate());
     }
 
-    public String getEditionName() {
+    protected String getProduct() {
+        return "RouteConverter";
+    }
+
+    public String getEdition() {
         return "RouteConverter Online Edition";
     }
 
@@ -260,9 +268,8 @@ public class RouteConverter extends SingleFrameApplication {
     private static final String ADD_AUDIO_PREFERENCE = "addAudio";
     private static final String UPLOAD_ROUTE_PREFERENCE = "uploadRoute";
 
-    private static final String DEBUG_PREFERENCE = "debug";
-    private static final String SHOWED_MISSING_TRANSLATOR_PREFERENCE = "showedMissingTranslator-2.18";
-    public static final String AUTOMATIC_UPDATE_CHECK_PREFERENCE = "automaticUpdateCheck-2.18";
+    private static final String SHOWED_MISSING_TRANSLATOR_PREFERENCE = "showedMissingTranslator-2.20"; // versioned preference
+    public static final String AUTOMATIC_UPDATE_CHECK_PREFERENCE = "automaticUpdateCheck-2.20";
 
     private NavigationFormatRegistry navigationFormatRegistry = new NavigationFormatRegistry();
     private RouteServiceOperator routeServiceOperator;
@@ -270,16 +277,18 @@ public class RouteConverter extends SingleFrameApplication {
     private DataSourceManager dataSourceManager;
     private HgtFilesService hgtFilesService;
     private ElevationServiceFacade elevationServiceFacade = new ElevationServiceFacade();
+    private GeocodingServiceFacade geocodingServiceFacade = new GeocodingServiceFacade();
     private RoutingServiceFacade routingServiceFacade = new RoutingServiceFacade();
     private InsertPositionFacade insertPositionFacade = new InsertPositionFacade();
     private BooleanModel showAllPositionsAfterLoading = new BooleanModel(SHOW_ALL_POSITIONS_AFTER_LOADING_PREFERENCE, true);
     private BooleanModel recenterAfterZooming = new BooleanModel(RECENTER_AFTER_ZOOMING_PREFERENCE, true);
     private BooleanModel showCoordinates = new BooleanModel(SHOW_COORDINATES_PREFERENCE, false);
     private BooleanModel showWaypointDescription = new BooleanModel(SHOW_WAYPOINT_DESCRIPTION_PREFERENCE, false);
-    private StringModel timeZone = new StringModel(TIME_ZONE_PREFERENCE, TimeZone.getDefault().getID());
+    private TimeZoneModel timeZoneModel = new TimeZoneModel(TIME_ZONE_PREFERENCE, TimeZone.getDefault());
+    private TimeZoneModel photoTimeZoneModel = new TimeZoneModel(PHOTO_TIMEZONE_PREFERENCE, timeZoneModel.getTimeZone());
     private FixMapModeModel fixMapModeModel = new FixMapModeModel();
-    private ColorModel routeColorModel = new ColorModel("route", 7123443); // "6CB1F3"
-    private ColorModel trackColorModel = new ColorModel("track", 13311); // "0033FF"
+    private ColorModel routeColorModel = new ColorModel("route", "C86CB1F3"); // "6CB1F3" w 0.8 alpha
+    private ColorModel trackColorModel = new ColorModel("track", "FF0033FF"); // "0033FF" w 1.0 alpha
     private UnitSystemModel unitSystemModel = new UnitSystemModel();
     private GoogleMapsServerModel googleMapsServerModel = new GoogleMapsServerModel();
     private ProfileModeModel profileModeModel = new ProfileModeModel();
@@ -340,10 +349,7 @@ public class RouteConverter extends SingleFrameApplication {
 
     private void initializeLogging() {
         LoggingHelper loggingHelper = LoggingHelper.getInstance();
-        loggingHelper.logToFile();
-        if (preferences.getBoolean(DEBUG_PREFERENCE, false)) {
-            loggingHelper.logToConsole();
-        }
+        loggingHelper.logToFileAndConsole();
         log.info("Started " + getTitle() + " for " + parseVersionFromManifest().getOperationSystem() + " with locale " + Locale.getDefault() +
                 " on " + getJava() + " and " + getPlatform() + " with " + getMaximumMemory() + " MByte heap");
     }
@@ -403,6 +409,7 @@ public class RouteConverter extends SingleFrameApplication {
 
         initializeHelp();
         getContext().getActionManager().logUsage();
+        APIKeyRegistry.getInstance().logUsage();
     }
 
     private MapView createMapView(String className) {
@@ -416,7 +423,7 @@ public class RouteConverter extends SingleFrameApplication {
     }
 
     private void openFrame() {
-        createFrame(getTitle(), "/slash/navigation/converter/gui/RouteConverter.png", contentPane, null, new FrameMenu().createMenuBar());
+        createFrame(getTitle(), "/slash/navigation/converter/gui/" + getProduct() + ".png", contentPane, null, new FrameMenu().createMenuBar());
         if (isMac())
             new ApplicationMenu().addApplicationMenuItems();
 
@@ -434,16 +441,20 @@ public class RouteConverter extends SingleFrameApplication {
     private void openMapView() {
         mapSplitPane.addPropertyChangeListener(new MapSplitPaneListener());
 
-        File file = new File(getApplicationDirectory("tileservers"), "default.xml");
-        getDownloadManager().executeDownload("RouteConverter Tile Servers", getApiUrl() + V1 + "tileservers/" + FORMAT_XML, Copy, file, new Runnable() {
-            public void run() {
-                invokeLater(new Runnable() {
-                    public void run() {
-                        setMapView(getMapViewPreference());
-                    }
-                });
-            }
-        });
+        try {
+            File file = new File(getApplicationDirectory("tileservers"), "default.xml");
+            getDownloadManager().executeDownload("RouteConverter Tile Servers", getApiUrl() + V1 + "tileservers/" + FORMAT_XML, Copy, file, new Runnable() {
+                public void run() {
+                    invokeLater(new Runnable() {
+                        public void run() {
+                            setMapView(getMapViewPreference());
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            log.warning("Could not download tile servers: " + e);
+        }
     }
 
     public synchronized void setMapView(MapViewImplementation mapViewImplementation) {
@@ -478,10 +489,8 @@ public class RouteConverter extends SingleFrameApplication {
         @SuppressWarnings({"ThrowableResultOfMethodCallIgnored"})
         Throwable cause = getMapView().getInitializationCause();
         if (getMapView().getComponent() == null || cause != null) {
-            StringWriter stackTrace = new StringWriter();
-            cause.printStackTrace(new PrintWriter(stackTrace));
             mapPanel.add(new JLabel(MessageFormat.format(getBundle().getString("initialize-map-error"),
-                    stackTrace.toString().replaceAll("\n", "<p>"))), MAP_PANEL_CONSTRAINTS);
+                    printStackTrace(cause).replaceAll("\n", "<p>"))), MAP_PANEL_CONSTRAINTS);
         } else {
             mapPanel.add(getMapView().getComponent(), MAP_PANEL_CONSTRAINTS);
         }
@@ -523,9 +532,8 @@ public class RouteConverter extends SingleFrameApplication {
     }
 
     protected void shutdown() {
-        if (isMapViewAvailable()) {
+        if (isMapViewAvailable())
             getMapView().dispose();
-        }
         getConvertPanel().dispose();
         getHgtFilesService().dispose();
         if (positionAugmenter != null)
@@ -709,28 +717,10 @@ public class RouteConverter extends SingleFrameApplication {
         });
     }
 
-    public void handleOutOfMemoryError() {
-        // get some air to breath
-        System.gc();
-        System.runFinalization();
-
-        final long limitBefore = getMaximumMemory();
-        final long limitAfter = limitBefore * 2;
-        invokeLater(new Runnable() {
-            public void run() {
-                showMessageDialog(frame,
-                        MessageFormat.format(getBundle().getString("out-of-memory-error"), limitBefore, limitAfter),
-                        frame.getTitle(), ERROR_MESSAGE);
-            }
-        });
-    }
-
     public void handleOpenError(final Throwable throwable, final String path) {
         invokeLater(new Runnable() {
             public void run() {
-                StringWriter stackTrace = new StringWriter();
-                throwable.printStackTrace(new PrintWriter(stackTrace));
-                log.severe("Open error from " + path + ": " + throwable + "\n" + stackTrace.toString());
+                log.severe("Open error from " + path + ": " + throwable + "\n" + printStackTrace(throwable));
                 JLabel labelOpenError = new JLabel(MessageFormat.format(getBundle().getString("open-error"), shortenPath(path, 60), getLocalizedMessage(throwable)));
                 labelOpenError.addMouseListener(new MouseAdapter() {
                     public void mouseClicked(MouseEvent me) {
@@ -745,10 +735,8 @@ public class RouteConverter extends SingleFrameApplication {
     public void handleOpenError(final Throwable throwable, final List<URL> urls) {
         invokeLater(new Runnable() {
             public void run() {
-                StringWriter stackTrace = new StringWriter();
-                throwable.printStackTrace(new PrintWriter(stackTrace));
                 String dialogUrls = printArrayToDialogString(urls.toArray(new URL[urls.size()]));
-                log.severe("Open error from " + dialogUrls + ": " + throwable + "\n" + stackTrace.toString());
+                log.severe("Open error from " + dialogUrls + ": " + throwable + "\n" + printStackTrace(throwable));
                 JLabel labelOpenError = new JLabel(MessageFormat.format(getBundle().getString("open-error"), dialogUrls, getLocalizedMessage(throwable)));
                 labelOpenError.addMouseListener(new MouseAdapter() {
                     public void mouseClicked(MouseEvent me) {
@@ -859,6 +847,10 @@ public class RouteConverter extends SingleFrameApplication {
         return elevationServiceFacade;
     }
 
+    public GeocodingServiceFacade getGeocodingServiceFacade() {
+        return geocodingServiceFacade;
+    }
+
     public InsertPositionFacade getInsertPositionFacade() {
         return insertPositionFacade;
     }
@@ -879,16 +871,17 @@ public class RouteConverter extends SingleFrameApplication {
         return getDataSourceManager().getDownloadManager();
     }
 
-    private PositionAugmenter positionAugmenter = null;
+    private PositionAugmenter positionAugmenter;
 
     public synchronized PositionAugmenter getPositionAugmenter() {
         if (positionAugmenter == null) {
-            positionAugmenter = new PositionAugmenter(getConvertPanel().getPositionsView(), getConvertPanel().getPositionsModel(), getFrame());
+            positionAugmenter = new PositionAugmenter(getConvertPanel().getPositionsView(), getConvertPanel().getPositionsModel(),
+                    getFrame(), elevationServiceFacade, geocodingServiceFacade);
         }
         return positionAugmenter;
     }
 
-    private AudioPlayer audioPlayer = null;
+    private AudioPlayer audioPlayer;
 
     public synchronized AudioPlayer getAudioPlayer() {
         if (audioPlayer == null) {
@@ -897,7 +890,7 @@ public class RouteConverter extends SingleFrameApplication {
         return audioPlayer;
     }
 
-    private GeoTagger geoTagger = null;
+    private GeoTagger geoTagger;
 
     public GeoTagger getGeoTagger() {
         if (geoTagger == null) {
@@ -906,13 +899,8 @@ public class RouteConverter extends SingleFrameApplication {
         return geoTagger;
     }
 
-    public String getPhotoTimeZone() {
-        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
-        return preferences.get(PHOTO_TIMEZONE_PREFERENCE, timeZone.getString());
-    }
-
-    public void setPhotoTimeZone(String timeZoneId) {
-        preferences.put(PHOTO_TIMEZONE_PREFERENCE, timeZoneId);
+    public TimeZoneModel getPhotoTimeZone() {
+        return photoTimeZoneModel;
     }
 
     protected MapViewCallback getMapViewCallback() {
@@ -961,8 +949,8 @@ public class RouteConverter extends SingleFrameApplication {
         return showWaypointDescription;
     }
 
-    public StringModel getTimeZone() {
-        return timeZone;
+    public TimeZoneModel getTimeZone() {
+        return timeZoneModel;
     }
 
     public void showMapBorder(BoundingBox mapBoundingBox) {
@@ -983,7 +971,7 @@ public class RouteConverter extends SingleFrameApplication {
         return result;
     }
 
-    protected MapViewImplementation getPreferredMapView() {
+    private MapViewImplementation getPreferredMapView() {
         return getAvailableMapViews().get(0);
     }
 
@@ -997,7 +985,8 @@ public class RouteConverter extends SingleFrameApplication {
         } catch (IllegalArgumentException e) {
             // intentionally left empty
         }
-        return preferred;
+        // really want the first available map view
+        return RouteConverter.this.getPreferredMapView();
     }
 
     private void setMapViewPreference(MapViewImplementation mapView) {
@@ -1279,8 +1268,8 @@ public class RouteConverter extends SingleFrameApplication {
     }
 
     private class CalculatedDistanceNotifier extends AbstractMapViewListener {
-        public void calculatedDistance(double meters, long seconds) {
-            getConvertPanel().fireCalculatedDistance(meters, seconds);
+        public void calculatedDistances(Map<Integer, DistanceAndTime> indexToDistanceAndTime) {
+            getConvertPanel().calculatedDistanceFromRouting(indexToDistanceAndTime);
         }
     }
 
@@ -1289,14 +1278,14 @@ public class RouteConverter extends SingleFrameApplication {
         RouteFeedback routeFeedback = new RouteFeedback(System.getProperty("feedback", "http://www.routeconverter.com/feedback/"), getApiUrl(), RouteConverter.getInstance().getCredentials());
         routeServiceOperator = new RouteServiceOperator(getFrame(), routeFeedback);
         updateChecker = new UpdateChecker(routeFeedback);
-        DownloadManager downloadManager = new DownloadManager(new File(getApplicationDirectory(), "download-queue.xml"));
+        DownloadManager downloadManager = new DownloadManager(new File(getApplicationDirectory(), getEditionId() + "-queue.xml"));
         downloadManager.addDownloadListener(new ChecksumSender());
         downloadManager.addDownloadListener(new DownloadNotifier());
         dataSourceManager = new DataSourceManager(downloadManager);
         hgtFilesService = new HgtFilesService(dataSourceManager);
-        timeZone.addChangeListener(new ChangeListener() {
+        timeZoneModel.addChangeListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
-                ColumbusV1000Device.setTimeZone(timeZone.getString());
+                ColumbusV1000Device.setTimeZone(timeZoneModel.getTimeZoneId());
             }
         });
     }
@@ -1360,7 +1349,7 @@ public class RouteConverter extends SingleFrameApplication {
     }
 
     public String getApiUrl() {
-        return System.getProperty("api", "http://api.routeconverter.com/");
+        return System.getProperty("api", "https://api.routeconverter.com/");
     }
 
     public File getTileServersDirectory() {
@@ -1378,22 +1367,20 @@ public class RouteConverter extends SingleFrameApplication {
             log.warning("Could not initialize datasource manager: " + e);
             getContext().getNotificationManager().showNotification(MessageFormat.format(
                     getBundle().getString("datasource-initialization-error"), getLocalizedMessage(e)), null);
-
-            if (e instanceof UnmarshalException) {
-                log.info("Deleting old datasources");
-                try {
-                    recursiveDelete(getDataSourcesDirectory());
-                } catch (IOException e2) {
-                    log.warning("Could not delete old datasources: " + e2);
-                }
-            }
         }
 
         initializeElevationServices();
+        initializeGeocodingServices();
         initializeRoutingServices();
 
         // make sure the queue is loaded before any components uses it
-        getDownloadManager().loadQueue();
+        try {
+            getDownloadManager().loadQueue();
+        } catch (Exception e) {
+            log.warning("Could not load download manager queue: " + e);
+            getContext().getNotificationManager().showNotification(MessageFormat.format(
+                    getBundle().getString("datasource-initialization-error"), getLocalizedMessage(e)), null);
+        }
 
         new Thread(new Runnable() {
             public void run() {
@@ -1402,7 +1389,7 @@ public class RouteConverter extends SingleFrameApplication {
                 try {
                     getDataSourceManager().update(getEditionId(), getApiUrl(), getDataSourcesDirectory());
                 } catch (Exception e) {
-                    log.warning("Could not update datasource manager: " + e);
+                    log.warning(format("Could not update datasource manager: %s, %s", e, printStackTrace(e)));
                     getContext().getNotificationManager().showNotification(MessageFormat.format(
                             getBundle().getString("datasource-update-error"), getLocalizedMessage(e)), null);
                 }
@@ -1423,7 +1410,7 @@ public class RouteConverter extends SingleFrameApplication {
         getElevationServiceFacade().setPreferredElevationService(automaticElevationService);
 
         getElevationServiceFacade().addElevationService(new GeoNamesService());
-        getElevationServiceFacade().addElevationService(new GoogleMapsService());
+        getElevationServiceFacade().addElevationService(new GoogleService());
 
         getHgtFilesService().initialize();
         for (HgtFiles hgtFile : getHgtFilesService().getHgtFiles()) {
@@ -1439,8 +1426,19 @@ public class RouteConverter extends SingleFrameApplication {
         }
     }
 
+    protected void initializeGeocodingServices() {
+        AutomaticGeocodingService automaticGeocodingService = new AutomaticGeocodingService(getGeocodingServiceFacade());
+        getGeocodingServiceFacade().addGeocodingService(automaticGeocodingService);
+        getGeocodingServiceFacade().setPreferredGeocodingService(automaticGeocodingService);
+
+        getGeocodingServiceFacade().addGeocodingService(new GeoNamesService());
+        getGeocodingServiceFacade().addGeocodingService(new GoogleService());
+        getGeocodingServiceFacade().addGeocodingService(new NominatimService());
+        getGeocodingServiceFacade().addGeocodingService(new PhotonService());
+    }
+
     protected void initializeRoutingServices() {
-        RoutingService service = new GoogleDirectionsService();
+        RoutingService service = new GoogleDirections();
         getRoutingServiceFacade().addRoutingService(service);
         getRoutingServiceFacade().setPreferredRoutingService(service);
     }

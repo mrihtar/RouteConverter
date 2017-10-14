@@ -27,8 +27,6 @@ import slash.navigation.common.NumberingStrategy;
 import slash.navigation.converter.gui.RouteConverter;
 import slash.navigation.converter.gui.models.PositionColumnValues;
 import slash.navigation.converter.gui.models.PositionsModel;
-import slash.navigation.geonames.GeoNamesService;
-import slash.navigation.googlemaps.GoogleMapsService;
 import slash.navigation.gui.Application;
 import slash.navigation.gui.events.ContinousRange;
 import slash.navigation.gui.events.RangeOperation;
@@ -44,27 +42,25 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Logger;
 
+import static java.lang.Math.abs;
 import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.SwingUtilities.invokeLater;
 import static javax.swing.event.TableModelEvent.ALL_COLUMNS;
 import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
-import static slash.common.io.Transfer.trim;
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
+import static slash.common.helpers.ThreadHelper.createSingleThreadExecutor;
 import static slash.common.io.Transfer.widthInDigits;
-import static slash.navigation.base.RouteCalculations.interpolateTime;
+import static slash.common.type.CompactCalendar.fromMillis;
 import static slash.navigation.base.RouteComments.formatNumberedPosition;
 import static slash.navigation.base.RouteComments.getNumberedPosition;
 import static slash.navigation.common.NumberingStrategy.Absolute_Position_Within_Position_List;
-import static slash.navigation.converter.gui.models.PositionColumns.DATE_TIME_COLUMN_INDEX;
-import static slash.navigation.converter.gui.models.PositionColumns.DESCRIPTION_COLUMN_INDEX;
-import static slash.navigation.converter.gui.models.PositionColumns.ELEVATION_COLUMN_INDEX;
-import static slash.navigation.converter.gui.models.PositionColumns.LATITUDE_COLUMN_INDEX;
-import static slash.navigation.converter.gui.models.PositionColumns.LONGITUDE_COLUMN_INDEX;
-import static slash.navigation.converter.gui.models.PositionColumns.SPEED_COLUMN_INDEX;
+import static slash.navigation.converter.gui.helpers.PositionHelper.formatElevation;
+import static slash.navigation.converter.gui.helpers.PositionHelper.formatSpeed;
+import static slash.navigation.converter.gui.models.PositionColumns.*;
 import static slash.navigation.gui.helpers.JTableHelper.scrollToPosition;
 
 /**
@@ -81,17 +77,20 @@ public class PositionAugmenter {
     private final JTable positionsView;
     private final PositionsModel positionsModel;
 
-    private final ExecutorService executor = newSingleThreadExecutor();
-    private final ElevationServiceFacade elevationServiceFacade = RouteConverter.getInstance().getElevationServiceFacade();
-    private final GeoNamesService geonamesService = new GeoNamesService();
-    private final GoogleMapsService googleMapsService = new GoogleMapsService();
+    private final ExecutorService executor = createSingleThreadExecutor("AugmentPositions");
+    private final ElevationServiceFacade elevationServiceFacade;
+    private final GeocodingServiceFacade geocodingServiceFacade;
     private static final Object notificationMutex = new Object();
     private boolean running = true;
 
-    public PositionAugmenter(JTable positionsView, PositionsModel positionsModel, JFrame frame) {
+    public PositionAugmenter(JTable positionsView, PositionsModel positionsModel, JFrame frame,
+                             ElevationServiceFacade elevationServiceFacade,
+                             GeocodingServiceFacade geocodingServiceFacade) {
         this.positionsView = positionsView;
         this.positionsModel = positionsModel;
         this.frame = frame;
+        this.elevationServiceFacade = elevationServiceFacade;
+        this.geocodingServiceFacade = geocodingServiceFacade;
     }
 
     public void interrupt() {
@@ -134,7 +133,7 @@ public class PositionAugmenter {
     }
 
     private static class CancelAction extends AbstractAction {
-        private boolean canceled = false;
+        private boolean canceled;
 
         public boolean isCanceled() {
             return canceled;
@@ -159,7 +158,7 @@ public class PositionAugmenter {
         executor.execute(new Runnable() {
             public void run() {
                 final int[] count = new int[1];
-                count[0] = 1;
+                count[0] = 0;
 
                 try {
                     invokeLater(new Runnable() {
@@ -183,7 +182,7 @@ public class PositionAugmenter {
                                     // range operations outweights the possible optimization
                                     operation.run(index, position);
                                 } catch (Exception e) {
-                                    log.warning(format("Error while running operation %s on position %d: %s", operation, index, e));
+                                    log.warning(format("Error while running operation %s on position %d: %s, %s", operation, index, e, printStackTrace(e)));
                                     lastException[0] = e;
                                 }
                             }
@@ -244,7 +243,7 @@ public class PositionAugmenter {
                     }
 
                     public boolean run(int index, NavigationPosition position) throws Exception {
-                        NavigationPosition coordinates = googleMapsService.getPositionFor(position.getDescription());
+                        NavigationPosition coordinates = RouteConverter.getInstance().getGeocodingServiceFacade().getPositionFor(position.getDescription());
                         if (coordinates != null)
                             positionsModel.edit(index,
                                     new PositionColumnValues(asList(LONGITUDE_COLUMN_INDEX, LATITUDE_COLUMN_INDEX),
@@ -285,8 +284,8 @@ public class PositionAugmenter {
                     }
 
                     public boolean run(int index, NavigationPosition position) throws Exception {
-                        Double previousElevation = position.getElevation();
-                        Double nextElevation = elevationServiceFacade.getElevationFor(position.getLongitude(), position.getLatitude());
+                        String previousElevation = formatElevation(position.getElevation());
+                        String nextElevation = getElevationFor(position);
                         boolean changed = nextElevation != null && !nextElevation.equals(previousElevation);
                         if (changed)
                             positionsModel.edit(index, new PositionColumnValues(ELEVATION_COLUMN_INDEX, nextElevation), false, true);
@@ -298,6 +297,17 @@ public class PositionAugmenter {
                     }
                 }
         );
+    }
+
+    private String getElevationFor(NavigationPosition position) throws IOException {
+        if(!position.hasCoordinates())
+            return null;
+
+        Double elevation = elevationServiceFacade.getElevationFor(position.getLongitude(), position.getLatitude());
+        if(elevation == null)
+            return null;
+
+        return formatElevation(elevation);
     }
 
     private void downloadElevationData(int[] rows, boolean waitForDownload) {
@@ -318,17 +328,14 @@ public class PositionAugmenter {
             processElevations(positionsView, positionsModel, rows, COORDINATE_PREDICATE);
     }
 
-
-    private void addPopulatedPlaces(final JTable positionsTable,
-                                    final PositionsModel positionsModel,
-                                    final int[] rows,
-                                    final OverwritePredicate predicate) {
+    private void addAddresses(final JTable positionsTable,
+                              final PositionsModel positionsModel,
+                              final int[] rows,
+                              final OverwritePredicate predicate) {
         executeOperation(positionsTable, positionsModel, rows, true, predicate,
                 new Operation() {
-                    private GeoNamesService geonamesService = new GeoNamesService();
-
                     public String getName() {
-                        return "PopulatedPlacePositionAugmenter";
+                        return "AddressPositionAugmenter";
                     }
 
                     public int getColumnIndex() {
@@ -339,61 +346,23 @@ public class PositionAugmenter {
                     }
 
                     public boolean run(int index, NavigationPosition position) throws Exception {
-                        String description = geonamesService.getNearByFor(position.getLongitude(), position.getLatitude());
+                        String description = geocodingServiceFacade.getAddressFor(position);
                         if (description != null)
                             positionsModel.edit(index, new PositionColumnValues(DESCRIPTION_COLUMN_INDEX, description), false, true);
                         return description != null;
                     }
 
                     public String getMessagePrefix() {
-                        return "add-populated-place-";
+                        return "add-address-";
                     }
                 }
         );
     }
 
-    public void addPopulatedPlaces() {
+    public void addAddresses() {
         int[] rows = positionsView.getSelectedRows();
         if (rows.length > 0)
-            addPopulatedPlaces(positionsView, positionsModel, rows, COORDINATE_PREDICATE);
-    }
-
-
-    private void addPostalAddresses(final JTable positionsTable,
-                                    final PositionsModel positionsModel,
-                                    final int[] rows,
-                                    final OverwritePredicate predicate) {
-        executeOperation(positionsTable, positionsModel, rows, true, predicate,
-                new Operation() {
-                    public String getName() {
-                        return "PostalAddressPositionAugmenter";
-                    }
-
-                    public int getColumnIndex() {
-                        return DESCRIPTION_COLUMN_INDEX;
-                    }
-
-                    public void performOnStart() {
-                    }
-
-                    public boolean run(int index, NavigationPosition position) throws Exception {
-                        String description = googleMapsService.getLocationFor(position.getLongitude(), position.getLatitude());
-                        if (description != null)
-                            positionsModel.edit(index, new PositionColumnValues(DESCRIPTION_COLUMN_INDEX, description), false, true);
-                        return description != null;
-                    }
-
-                    public String getMessagePrefix() {
-                        return "add-postal-address-";
-                    }
-                }
-        );
-    }
-
-    public void addPostalAddresses() {
-        int[] rows = positionsView.getSelectedRows();
-        if (rows.length > 0)
-            addPostalAddresses(positionsView, positionsModel, rows, COORDINATE_PREDICATE);
+            addAddresses(positionsView, positionsModel, rows, COORDINATE_PREDICATE);
     }
 
 
@@ -417,8 +386,8 @@ public class PositionAugmenter {
                     public boolean run(int index, NavigationPosition position) throws Exception {
                         NavigationPosition predecessor = index > 0 && index < positionsModel.getRowCount() ? positionsModel.getPosition(index - 1) : null;
                         if (predecessor != null) {
-                            Double previousSpeed = position.getSpeed();
-                            Double nextSpeed = position.calculateSpeed(predecessor);
+                            String previousSpeed = formatSpeed(position.getSpeed());
+                            String nextSpeed = formatSpeed(position.calculateSpeed(predecessor));
                             boolean changed = nextSpeed != null && !nextSpeed.equals(previousSpeed);
                             if (changed)
                                 positionsModel.edit(index, new PositionColumnValues(SPEED_COLUMN_INDEX, nextSpeed), false, true);
@@ -440,22 +409,43 @@ public class PositionAugmenter {
             processSpeeds(positionsView, positionsModel, rows, COORDINATE_PREDICATE);
     }
 
-    private NavigationPosition findPredecessorWithTime(PositionsModel positionsModel, int index) {
-        while (index-- > 0) {
+    int findPredecessorWithTime(PositionsModel positionsModel, int index) {
+        while (index != -1) {
             NavigationPosition position = positionsModel.getPosition(index);
             if (position.hasTime())
-                return position;
+                return index;
+            index--;
         }
-        return null;
+        return -1;
     }
 
-    private NavigationPosition findSuccessorWithTime(PositionsModel positionsModel, int index) {
-        while (index++ < positionsModel.getRowCount() - 1) {
+    int findSuccessorWithTime(PositionsModel positionsModel, int index) {
+        while (index < positionsModel.getRowCount()) {
             NavigationPosition position = positionsModel.getPosition(index);
             if (position.hasTime())
-                return position;
+                return index;
+            index++;
         }
-        return null;
+        return -1;
+    }
+
+    private CompactCalendar interpolateTime(PositionsModel positionsModel, int positionIndex,
+                                            int predecessorIndex, int successorIndex) {
+        NavigationPosition predecessor = positionsModel.getPosition(predecessorIndex);
+        if (!predecessor.hasTime())
+            return null;
+        NavigationPosition successor = positionsModel.getPosition(successorIndex);
+        if (!successor.hasTime())
+            return null;
+
+        long timeDelta = abs(predecessor.calculateTime(successor));
+
+        double distanceToPredecessor = positionsModel.getRoute().getDistance(predecessorIndex, positionIndex);
+        double distanceToSuccessor = positionsModel.getRoute().getDistance(positionIndex, successorIndex);
+        double distanceRatio = distanceToPredecessor / (distanceToPredecessor + distanceToSuccessor);
+
+        long time = (long) (predecessor.getTime().getTimeInMillis() + (double) timeDelta * distanceRatio);
+        return fromMillis(time);
     }
 
     private void processTimes(final JTable positionsTable,
@@ -464,6 +454,8 @@ public class PositionAugmenter {
                               final OverwritePredicate predicate) {
         executeOperation(positionsTable, positionsModel, rows, false, predicate,
                 new Operation() {
+                    private int predecessorIndex, successorIndex;
+
                     public String getName() {
                         return "TimePositionAugmenter";
                     }
@@ -473,14 +465,14 @@ public class PositionAugmenter {
                     }
 
                     public void performOnStart() {
+                        predecessorIndex = findPredecessorWithTime(positionsModel, rows[0]);
+                        successorIndex = findSuccessorWithTime(positionsModel, rows[rows.length-1]);
                     }
 
                     public boolean run(int index, NavigationPosition position) throws Exception {
-                        NavigationPosition predecessor = findPredecessorWithTime(positionsModel, index);
-                        NavigationPosition successor = findSuccessorWithTime(positionsModel, index);
-                        if (predecessor != null && successor != null) {
+                        if (predecessorIndex != -1 && successorIndex != -1) {
                             CompactCalendar previousTime = position.getTime();
-                            CompactCalendar nextTime = interpolateTime(position, predecessor, successor);
+                            CompactCalendar nextTime = interpolateTime(positionsModel, index, predecessorIndex, successorIndex);
                             boolean changed = nextTime != null && !nextTime.equals(previousTime);
                             if (changed)
                                 positionsModel.edit(index, new PositionColumnValues(DATE_TIME_COLUMN_INDEX, nextTime), false, true);
@@ -570,15 +562,25 @@ public class PositionAugmenter {
                          final boolean trackUndo) {
         executeOperation(positionsTable, positionsModel, rows, true, predicate,
                 new Operation() {
+                    private int predecessorIndex, successorIndex;
+
                     public String getName() {
                         return "DataPositionAugmenter";
                     }
 
                     public int getColumnIndex() {
+                        if(complementDescription && !complementElevation && !complementTime)
+                            return DESCRIPTION_COLUMN_INDEX;
+                        if(!complementDescription && complementElevation && !complementTime)
+                            return ELEVATION_COLUMN_INDEX;
+                        if(!complementDescription && !complementElevation && !complementTime)
+                            return DATE_TIME_COLUMN_INDEX;
                         return ALL_COLUMNS; // might be DESCRIPTION_COLUMN_INDEX, ELEVATION_COLUMN_INDEX, DATE_TIME_COLUMN_INDEX
                     }
 
                     public void performOnStart() {
+                        predecessorIndex = findPredecessorWithTime(positionsModel, rows[0]);
+                        successorIndex = findSuccessorWithTime(positionsModel, rows[rows.length-1]);
                         downloadElevationData(rows, waitForDownload);
                     }
 
@@ -587,7 +589,7 @@ public class PositionAugmenter {
                         List<Object> columnValues = new ArrayList<>(3);
 
                         if (complementDescription) {
-                            String nextDescription = waitForDownload ? getDescriptionFor(position) : null;
+                            String nextDescription = waitForDownload ? geocodingServiceFacade.getAddressFor(position) : null;
                             if (nextDescription != null)
                                 nextDescription = createDescription(index + 1, nextDescription);
                             String previousDescription = position.getDescription();
@@ -599,9 +601,9 @@ public class PositionAugmenter {
                         }
 
                         if (complementElevation) {
-                            Double previousElevation = position.getElevation();
-                            Double nextElevation = waitForDownload || elevationServiceFacade.isDownload() ?
-                                    elevationServiceFacade.getElevationFor(position.getLongitude(), position.getLatitude()) : null;
+                            String previousElevation = formatElevation(position.getElevation());
+                            String nextElevation = waitForDownload || elevationServiceFacade.isDownload() ?
+                                    getElevationFor(position) : null;
                             boolean changed = nextElevation != null && !nextElevation.equals(previousElevation);
                             if (changed) {
                                 columnIndices.add(ELEVATION_COLUMN_INDEX);
@@ -610,11 +612,9 @@ public class PositionAugmenter {
                         }
 
                         if (complementTime) {
-                            NavigationPosition predecessor = findPredecessorWithTime(positionsModel, index);
-                            NavigationPosition successor = findSuccessorWithTime(positionsModel, index);
-                            if (predecessor != null && successor != null) {
+                            if (predecessorIndex != -1 && successorIndex != -1) {
                                 CompactCalendar previousTime = position.getTime();
-                                CompactCalendar nextTime = interpolateTime(position, predecessor, successor);
+                                CompactCalendar nextTime = interpolateTime(positionsModel, index, predecessorIndex, successorIndex);
                                 boolean changed = nextTime != null && !nextTime.equals(previousTime);
                                 if (changed) {
                                     columnIndices.add(DATE_TIME_COLUMN_INDEX);
@@ -641,29 +641,6 @@ public class PositionAugmenter {
                     }
                 }
         );
-    }
-
-    private String getDescriptionFor(NavigationPosition position) {
-        String description = getLocationFor(position);
-        if (description == null)
-            description = getNearByFor(position);
-        return trim(description);
-    }
-
-    private String getLocationFor(NavigationPosition position) {
-        try {
-            return googleMapsService.getLocationFor(position.getLongitude(), position.getLatitude());
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    private String getNearByFor(NavigationPosition position) {
-        try {
-            return geonamesService.getNearByFor(position.getLongitude(), position.getLatitude());
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     public void addData(int[] rows, boolean description, boolean time, boolean elevation, boolean waitForDownload, boolean trackUndo) {

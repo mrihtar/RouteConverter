@@ -24,7 +24,7 @@ import slash.navigation.converter.gui.panels.ConvertPanel;
 
 import javax.swing.*;
 
-import static slash.navigation.converter.gui.models.LocalNames.POSITIONS;
+import static slash.navigation.converter.gui.models.LocalActionConstants.POSITIONS;
 import static slash.navigation.gui.helpers.JMenuHelper.createItem;
 import static slash.navigation.gui.helpers.JMenuHelper.createMenu;
 
@@ -45,14 +45,12 @@ public class PositionsTablePopupMenu extends AbstractTablePopupMenu {
         menu.add(createItem("cut"));
         menu.add(createItem("copy"));
         menu.add(createItem("paste"));
-        menu.add(createItem("select-all"));
         menu.addSeparator();
         menu.add(createItem("find-place"));
         JMenu completeMenu = createMenu("complete");
         completeMenu.add(createItem("add-coordinates"));
         completeMenu.add(createItem("add-elevation"));
-        completeMenu.add(createItem("add-postal-address"));
-        completeMenu.add(createItem("add-populated-place"));
+        completeMenu.add(createItem("add-address"));
         completeMenu.add(createItem("add-speed"));
         completeMenu.add(createItem("add-time"));
         completeMenu.add(createItem("add-number"));

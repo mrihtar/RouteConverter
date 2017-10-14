@@ -36,14 +36,17 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.logging.Logger;
 
 import static java.lang.Boolean.parseBoolean;
 import static java.lang.System.currentTimeMillis;
-import static javafx.application.Platform.*;
+import static javafx.application.Platform.isFxApplicationThread;
+import static javafx.application.Platform.runLater;
+import static javafx.application.Platform.setImplicitExit;
 import static javafx.concurrent.Worker.State;
 import static javafx.concurrent.Worker.State.SUCCEEDED;
-import static javax.swing.SwingUtilities.invokeLater;
 import static slash.common.io.Transfer.parseDouble;
 import static slash.navigation.rest.HttpRequest.USER_AGENT;
 
@@ -78,9 +81,20 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
 
     // initialization
 
-    private WebView createWebView() {
+    protected WebView createWebView() {
         try {
             final WebView webView = new WebView();
+            double browserScaleFactor = getBrowserScaleFactor();
+            if (browserScaleFactor != 1.0) {
+                // allow to compile code with Java 7; with Java 8 this would simply be
+                // webView.setZoom(browserScaleFactor);
+                try {
+                    Method method = WebView.class.getDeclaredMethod("setZoom", double.class);
+                    method.invoke(webView, browserScaleFactor);
+                } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
+                    // intentionally do nothing
+                }
+            }
             Group group = new Group();
             group.getChildren().add(webView);
             panel.setScene(new Scene(group));
@@ -92,14 +106,8 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
             webView.getEngine().setCreatePopupHandler(new Callback<PopupFeatures, WebEngine>() {
                 public WebEngine call(PopupFeatures config) {
                     // grab the last hyperlink that has :hover pseudoclass
-                    String url = executeScriptWithResult(
-                            "var list = document.querySelectorAll( ':hover' );" +
-                                    "for (i=list.length-1; i>-1; i--) {" +
-                                    "  if (list.item(i).getAttribute('href')) {" +
-                                    "    list.item(i).getAttribute('href'); break; " +
-                                    "}}");
-
-                    if (url != null) {
+                    String url = executeScriptWithResult("extractPopupHrefs()");
+                    if (url != null && isUrl(url)) {
                         mapViewCallback.startBrowser(url);
                     } else {
                         log.warning("No result from popup uri detector");
@@ -108,19 +116,28 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
                     // prevent from opening in WebView
                     return null;
                 }
+
+                private boolean isUrl(String url) {
+                    try {
+                        new URL(url);
+                        return true;
+                    } catch (MalformedURLException e) {
+                        return false;
+                    }
+                }
             });
             webView.getEngine().getLoadWorker().stateProperty().addListener(new ChangeListener<State>() {
-                private int startCount = 0;
+                private int startCount;
 
                 public void changed(ObservableValue<? extends State> observableValue, State oldState, State newState) {
                     log.info("WebView changed observableValue " + observableValue + " oldState " + oldState + " newState " + newState + " thread " + Thread.currentThread());
                     if (newState == SUCCEEDED) {
                         // get out of the listener callback
-                        invokeLater(new Runnable() {
+                        new Thread(new Runnable() {
                             public void run() {
                                 tryToInitialize(startCount++, currentTimeMillis());
                             }
-                        });
+                        }, "MapViewInitializer").start();
                     }
                 }
             });
@@ -169,7 +186,7 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
                 if (webView == null)
                     return;
 
-                log.info("Using JavaFX WebView to create map view");
+                log.info("Using JavaFX WebView to create map view: " + JavaFX7WebViewMapView.this.getClass().getName());
                 initializeWebPage();
             }
         });
@@ -197,8 +214,10 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
 
     private void setWebViewSizeToPanelSize() {
         Dimension size = panel.getSize();
-        if (webView != null)
+        if (webView != null) {
             webView.setMinSize(size.getWidth(), size.getHeight());
+            webView.setMaxSize(size.getWidth(), size.getHeight());
+        }
     }
 
     // bounds and center
@@ -206,7 +225,6 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
     protected NavigationPosition getNorthEastBounds() {
         return parsePosition("getNorthEastBounds();");
     }
-
     protected NavigationPosition getSouthWestBounds() {
         return parsePosition("getSouthWestBounds();");
     }
@@ -256,12 +274,22 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
         if (!isFxApplicationThread()) {
             runLater(new Runnable() {
                 public void run() {
-                    webView.getEngine().executeScript(script);
+                    try {
+                        webView.getEngine().executeScript(script);
+                    } catch (Throwable t) {
+                        log.info("Exception during runLater executeScript of " + script + ": " + t);
+                    }
+
                     logJavaScript(script, null);
                 }
             });
         } else {
-            webView.getEngine().executeScript(script);
+            try {
+                webView.getEngine().executeScript(script);
+            } catch (Throwable t) {
+                log.info("Exception during executeScript of " + script + ": " + t);
+            }
+
             logJavaScript(script, null);
         }
     }
@@ -281,7 +309,14 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
 
             runLater(new Runnable() {
                 public void run() {
-                    Object r = webView.getEngine().executeScript(script);
+                    Object r = null;
+                    try {
+                        r = webView.getEngine().executeScript(script);
+                    }
+                    catch (Throwable t) {
+                        log.info("Exception during runLater executeScript with result of " + script + ": " + t);
+                    }
+
                     if (debug && pollingCallback) {
                         log.info("After runLater, executeScript with result " + r);
                     }
@@ -304,7 +339,13 @@ public class JavaFX7WebViewMapView extends BrowserMapView {
                 }
             }
         } else {
-            result[0] = webView.getEngine().executeScript(script);
+            try {
+                result[0] = webView.getEngine().executeScript(script);
+            }
+            catch (Throwable t) {
+                log.info("Exception during executeScript with result of " + script + ": " + t);
+            }
+
             if (debug && pollingCallback) {
                 log.info("After executeScript with result " + result[0]);
             }

@@ -2,11 +2,11 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>time-album-pro</artifactId>
     <packaging>jar</packaging>
-    <name>The UI you see when you start TimeAlbum Pro</name>
+    <name>Platform-independent TimeAlbum Pro</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

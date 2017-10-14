@@ -27,11 +27,14 @@ import slash.navigation.mapview.MapView;
 import slash.navigation.mapview.mapsforge.MapViewCallbackOffline;
 
 import java.util.ResourceBundle;
+import java.util.logging.Logger;
 
 import static java.text.MessageFormat.format;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
-import static slash.navigation.gui.helpers.UIHelper.getFrame;
+import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
+import static slash.navigation.gui.helpers.WindowHelper.getFrame;
+import static slash.navigation.gui.helpers.WindowHelper.handleOutOfMemoryError;
 
 /**
  * Implements the callbacks from the {@link MapView} to the other RouteConverter services including the {@link MapManager}
@@ -41,8 +44,10 @@ import static slash.navigation.gui.helpers.UIHelper.getFrame;
  */
 
 public class MapViewCallbackOfflineImpl extends MapViewCallbackImpl implements MapViewCallbackOffline {
+    private static final Logger log = Logger.getLogger(MapViewCallbackOfflineImpl.class.getName());
+
     public MapManager getMapManager() {
-        return ((RouteConverterOffline)Application.getInstance()).getMapManager();
+        return ((RouteConverterOffline) Application.getInstance()).getMapManager();
     }
 
     private NotificationManager getNotificationManager() {
@@ -61,15 +66,18 @@ public class MapViewCallbackOfflineImpl extends MapViewCallbackImpl implements M
         getNotificationManager().showNotification(getBundle().getString("processing-routing-data"), null);
     }
 
-    public void showRoutingException(Exception e) {
-        //noinspection ConstantConditions
-        showMessageDialog(getFrame(), format(getBundle().getString("cannot-route-position-list"), e),
-                getFrame().getTitle(), ERROR_MESSAGE);
-
+    public void handleRoutingException(Throwable t) {
+        if (t instanceof OutOfMemoryError)
+            handleOutOfMemoryError(OutOfMemoryError.class.cast(t));
+        else {
+            log.severe("Cannot route position list: " + getLocalizedMessage(t));
+            showMessageDialog(getFrame(), format(getBundle().getString("cannot-route-position-list"), t),
+                    getFrame().getTitle(), ERROR_MESSAGE);
+        }
     }
 
     public void showMapException(String mapName, Exception e) {
-        //noinspection ConstantConditions
+        log.severe("Cannot display map " + mapName + ": " + getLocalizedMessage(e));
         showMessageDialog(getFrame(), format(getBundle().getString("cannot-display-map"), mapName, e),
                 getFrame().getTitle(), ERROR_MESSAGE);
     }

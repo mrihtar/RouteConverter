@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static slash.common.io.Transfer.isEmpty;
 import static slash.common.io.Transfer.parseXMLTime;
 import static slash.navigation.base.RouteCharacteristics.*;
 import static slash.navigation.tcx.TcxUtil.marshal1;
@@ -280,7 +281,9 @@ public class Tcx1Format extends TcxFormat {
             trackpointT.setTime(Transfer.formatXMLTime(position.getTime()));
 
             if (previous != null) {
-                distance += previous.calculateDistance(position);
+                Double previousDistance = previous.calculateDistance(position);
+                if (!isEmpty(previousDistance))
+                    distance += previousDistance;
             }
             previous = position;
             trackpointT.setDistanceMeters(distance);
@@ -338,7 +341,7 @@ public class Tcx1Format extends TcxFormat {
         try {
             marshal1(createTrainingCenterDatabase(route, startIndex, endIndex), target);
         } catch (JAXBException e) {
-            throw new IllegalArgumentException(e);
+            throw new IOException("Cannot marshall " + route + ": " + e, e);
         }
     }
 
@@ -346,7 +349,7 @@ public class Tcx1Format extends TcxFormat {
         try {
             marshal1(createTrainingCenterDatabase(routes), target);
         } catch (JAXBException e) {
-            throw new IllegalArgumentException(e);
+            throw new IOException("Cannot marshall " + routes + ": " + e, e);
         }
     }
 }

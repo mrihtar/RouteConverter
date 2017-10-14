@@ -73,8 +73,8 @@ public class HgtFiles implements ElevationService {
         return true;
     }
 
-    public boolean isSupportsPath() {
-        return true;
+    public boolean isOverQueryLimit() {
+        return false;
     }
 
     public String getPath() {
@@ -141,7 +141,7 @@ public class HgtFiles implements ElevationService {
             // fallback as long as .hgt is not part of the keys
             if (fragment == null)
                 fragment = dataSource.getFragment(removeExtension(key));
-            if (fragment != null && !createFile(fragment.getKey()).exists() && !createFile(fragment.getKey() + DOT_HGT).exists())
+            if (fragment != null && !createFile(fragment.getKey()).exists())
                 downloadables.add(fragment.getDownloadable());
         }
 
@@ -158,9 +158,9 @@ public class HgtFiles implements ElevationService {
         List<FileAndChecksum> fragments = new ArrayList<>();
         for (Fragment otherFragments : downloadable.getFragments()) {
             String key = otherFragments.getKey();
-            if(!key.endsWith(DOT_HGT))
-                key += DOT_HGT;
-            fragments.add(new FileAndChecksum(createFile(key), otherFragments.getLatestChecksum()));
+            // ignore fragment keys without extension which are reported by old RouteConverter releases
+            if (key.endsWith(DOT_HGT))
+                fragments.add(new FileAndChecksum(createFile(key), otherFragments.getLatestChecksum()));
         }
 
         String uri = downloadable.getUri();

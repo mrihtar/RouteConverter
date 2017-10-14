@@ -30,7 +30,6 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static slash.common.io.Transfer.formatDoubleAsString;
 import static slash.common.io.Transfer.*;
 import static slash.common.type.CompactCalendar.createDateFormat;
 import static slash.common.type.CompactCalendar.parseDate;
@@ -40,7 +39,7 @@ import static slash.navigation.common.NavigationConversion.*;
 /**
  * Reads and writes i-Blue 747 (.csv) files.
  *
- * Header: INDEX,RCR,DATE,TIME,VALID,LATITUDE,N/S,LONGITUDE,E/W,HEIGHT,SPEED,HEADING,DISTANCE,<br/>
+ * Header: INDEX,RCR,DATE,TIME,VALID,LATITUDE,N/S,LONGITUDE,E/W,HEIGHT,SPEED,HEADING,DISTANCE,
  * Format: 3656,T,2010/12/09,10:59:05,SPS,28.649061,N,17.896196,W,513.863 M,15.862 km/h,178.240250,34.60 M,
  *
  * @author Christian Pesch
@@ -155,7 +154,7 @@ public class Iblue747Format extends SimpleLineBasedFormat<SimpleRoute> {
         return createDateFormat(DATE_FORMAT).format(date.getTime());
     }
 
-    private Wgs84Position previousPosition = null;
+    private Wgs84Position previousPosition;
 
     protected void writePosition(Wgs84Position position, PrintWriter writer, int index, boolean firstPosition) {
         String date = formatDate(position.getTime());

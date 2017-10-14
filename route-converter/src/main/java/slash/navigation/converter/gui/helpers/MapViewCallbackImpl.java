@@ -27,7 +27,6 @@ import slash.navigation.routing.RoutingService;
 import slash.navigation.routing.TravelMode;
 
 import javax.swing.event.ChangeListener;
-import java.awt.*;
 import java.io.File;
 
 import static slash.navigation.converter.gui.helpers.PositionHelper.formatLatitude;
@@ -65,14 +64,6 @@ public class MapViewCallbackImpl implements MapViewCallback {
         return RouteConverter.getInstance().getRoutingServiceFacade().getTravelMode();
     }
 
-    public Color getRouteColor() {
-        return RouteConverter.getInstance().getRouteColorModel().getColor();
-    }
-
-    public Color getTrackColor() {
-        return RouteConverter.getInstance().getTrackColorModel().getColor();
-    }
-
     public boolean isAvoidFerries() {
         return RouteConverter.getInstance().getRoutingServiceFacade().isAvoidFerries();
     }
@@ -89,11 +80,11 @@ public class MapViewCallbackImpl implements MapViewCallback {
         return RouteConverter.getInstance().getTileServersDirectory();
     }
 
-    public void addChangeListener(ChangeListener l) {
+    public void addRoutingServiceChangeListener(ChangeListener l) {
         RouteConverter.getInstance().getRoutingServiceFacade().addChangeListener(l);
     }
 
-    public void removeChangeListener(ChangeListener l) {
+    public void removeRoutingServiceChangeListener(ChangeListener l) {
         RouteConverter.getInstance().getRoutingServiceFacade().removeChangeListener(l);
     }
 }

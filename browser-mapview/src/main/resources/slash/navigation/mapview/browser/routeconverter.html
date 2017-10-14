@@ -4,89 +4,13 @@
     <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
     <title>RouteConverter MapView</title>
-    <script src="${mapserverapiurl}/maps/api/js?v=3.23&sensor=false&libraries=geometry&language=${language}&region=${country}" type="text/javascript"></script>
+    <script src="${mapserverapiurl}/maps/api/js?v=3.&sensor=false&libraries=geometry&language=${language}&region=${country}&key=${googleapikey}" type="text/javascript"></script>
     <script src="jquery.min.js" type="text/javascript"></script>
     <script src="contextmenu.js" type="text/javascript"></script>
     <script src="keydragzoom.js" type="text/javascript"></script>
     <script src="label.js" type="text/javascript"></script>
     <script src="latlngcontrol.js" type="text/javascript"></script>
-    <style type="text/css">
-        html { overflow: hidden }
-        body { margin: 0; padding: 0 }
-        .normal { position: absolute; top: 0; left: 0; bottom: 0; right: 0; width: 100%; height: 100% }
-        #map { width: 100%; height: 100% }
-        #directions { display: none; padding-top: 20px }
-
-        .ContextMenu {
-            position: absolute;
-            z-index: 1000;
-            display: none;
-            background: #f0f0f0;
-            border: 1px solid #a0a0a0;
-            min-width: 90px;
-        }
-        .ContextMenu ul {
-            padding: 1px 0 1px 0;
-            margin: 0;
-        }
-        .ContextMenu li {
-            list-style: none;
-            padding: 0 1px;
-            margin: 0;
-        }
-        .ContextMenu a {
-            display: block;
-            color: #000000;
-            font-family: Verdana, Arial, sans-serif;
-            font-size: 10px;
-            text-decoration: none;
-            line-height: 22px;
-            padding: 1px 8px;
-            border: 1px solid #f0f0f0;
-        }
-        .ContextMenu li.hover a {
-            background-color: #ecf1f6;
-            border: 1px solid #aecff7;
-        }
-        .ContextMenu li.separator div {
-            border-top: solid 1px #cccccc;
-        }
-        .Label {
-            position: relative;
-            left: 7px;
-            top: -10px;
-            white-space: nowrap;
-            border: 0px;
-            font-family: arial;
-            font-size: 9px;
-            padding: 2px;
-            background-color: #fff;
-            opacity: .75;
-            filter: alpha(opacity = 75);
-            -ms-filter: "alpha(opacity=75)";
-            -khtml-opacity: .75;
-            -moz-opacity: .75;
-        }
-        #LatLngControl {
-            background: #ffc;
-            border: 1px solid #676767;
-            font-family: Verdana, Arial, sans-serif;
-            font-size: 0.7em;
-            padding: 2px 4px;
-            position: absolute;
-        }
-        #CopyrightControl {
-            background: #fff;
-            font-size: 10px;
-            font-family: Arial, sans-serif;
-            whitespace: nowrap;
-            opacity: .6;
-            filter: alpha(opacity = 60);
-            -ms-filter: "alpha(opacity=60)";
-            -khtml-opacity: .6;
-            -moz-opacity: .6;
-        }
-    </style>
+    <link rel="stylesheet" type="text/css" href="routeconverter.css">
 </head>
 <body class="normal" onload="initialize();"
       ondragstart="return false;" onselectstart="return false;"
@@ -95,7 +19,19 @@
 <div id="error"></div>
 <div id="map"></div>
 <div id="directions"></div>
+
 <script type="text/javascript">
+   if (typeof console != "undefined")
+       if (typeof console.log != 'undefined')
+           console.olog = console.log;
+       else
+           console.olog = function () {};
+   console.log = function (message) {
+       console.olog(message);
+       $('#error').append('<p>' + message + '</p>');
+   };
+   console.error = console.debug = console.info = console.log;
+
    function printMap(title, withDirections) {
        try {
            document.head.title = "";
@@ -242,8 +178,9 @@
        newSelectedPositions = [];
    }
 
-   function addPolyline(latLngs, color, weight) {
-       addOverlay(new google.maps.Polyline({path:latLngs, strokeColor:color, strokeWeight:weight, strokeOpacity:1, clickable:false, geodesic:true}));
+   function addPolyline(latLngs, color, opacity, weight) {
+       addOverlay(new google.maps.Polyline({path:latLngs, strokeColor:color, strokeOpacity:opacity, strokeWeight:weight,
+           clickable:false, geodesic:true}));
    }
 
    var waypointIcons = {};
@@ -275,16 +212,16 @@
                            for (var l = 0; l < path.length - 1; l++) {
                                waypoints.push(path[l].lat());
                                waypoints.push(path[l].lng());
-                               waypoints.push(l == 0 ? steps[k].distance.value : 0);
-                               waypoints.push(l == 0 ? steps[k].duration.value : 0);
-                               waypoints.push(l == 0 ? removeTags(steps[k].instructions) : "-");
+                               waypoints.push(l === 0 ? steps[k].distance.value : 0);
+                               waypoints.push(l === 0 ? steps[k].duration.value : 0);
+                               waypoints.push(l === 0 ? removeTags(steps[k].instructions) : "-");
                            }
                        }
                    }
                    callJavaWithPost("Insert-All-Waypoints: " + index + "/" + waypoints.join("/") + "\n\n");
                }
 
-           } else if (status == google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
+           } else if (status === google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
                callJavaWithUri("over-query-limit");
 
            } else {
@@ -349,19 +286,6 @@
        }
    }
 
-   var meters = 0;
-   var seconds = 0;
-
-   function fireDirectionsLoaded() {
-       callJavaWithUri("directions-load/" + meters + "/" + seconds);
-   }
-
-   function resetDirections() {
-       meters = 0;
-       seconds = 0;
-       fireDirectionsLoaded();
-   }
-
    function extractPath(directionsRequest) {
        var path = [];
        path.push(directionsRequest['origin']);
@@ -372,37 +296,42 @@
        return path;
    }
 
-   function renderDirections(directionsRequest, startIndex, lastSegment, color, weight) {
+   function renderDirections(directionsRequest, generationId, generationIndex, startIndex, lastSegment, color, opacity, weight) {
        directionsService.route(directionsRequest, function(result, status) {
-           if (status == google.maps.DirectionsStatus.OK) {
+           if (status === google.maps.DirectionsStatus.OK) {
                var panel = document.createElement("div");
                var renderer = new google.maps.DirectionsRenderer({preserveViewport: true, suppressMarkers: true,
-                   polylineOptions: {strokeColor: color, strokeWeight: weight, strokeOpacity: 0.8 },
+                   polylineOptions: {strokeColor: color, strokeOpacity: opacity, strokeWeight: weight },
                    draggable: true, hideRouteList: true, directions: result, panel: panel, map: map});
                google.maps.event.addListener(renderer, "directions_changed", function() {
                    insertPosition(renderer.directions, startIndex);
                });
                addDirections(renderer, panel);
 
+               var waypoints = [];
                for (var i = 0; i < result.routes.length; i++) {
                    var legs = result.routes[i].legs;
                    for (var j = 0; j < legs.length; j++) {
-                       meters += legs[j].distance.value;
-                       seconds += legs[j].duration.value;
+                       waypoints.push(legs[j].distance.value);
+                       waypoints.push(legs[j].duration.value);
                    }
                }
-               fireDirectionsLoaded();
+               callJavaWithUri("directions-load/" + generationId + "/" + generationIndex + "/" + waypoints.join("/"));
 
-           } else if (status == google.maps.DirectionsStatus.ZERO_RESULTS) {
+           } else if (status === google.maps.DirectionsStatus.ZERO_RESULTS) {
                var path = extractPath(directionsRequest);
                var polyline = new google.maps.Polyline({path: path, strokeColor: "#FF0000", strokeWeight: 5,
                    strokeOpacity: 0.3, clickable: false, geodesic: true, map: map});
                addDirections(polyline, undefined);
 
-               resetDirections();
                callJavaWithUri("zero-results");
 
-           } else if (status == google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
+           } else if (status === google.maps.DirectionsStatus.OVER_QUERY_LIMIT) {
+               var path = extractPath(directionsRequest);
+               var polyline = new google.maps.Polyline({path: path, strokeColor: "#FF8000", strokeWeight: 5,
+                   strokeOpacity: 0.3, clickable: false, geodesic: true, map: map});
+               addDirections(polyline, undefined);
+
                callJavaWithUri("over-query-limit");
 
            } else {
@@ -422,9 +351,9 @@
    var newPanels = [];
 
    function addDirections(renderer, panel) {
-       if (renderer != undefined)
+       if (renderer !== undefined)
            newRenderer.push(renderer);
-       if (panel != undefined)
+       if (panel !== undefined)
            newPanels.push(panel);
    }
 
@@ -515,9 +444,22 @@
 
    function ignoreKeystrokes(event) {
        // ctrl F, F5
-       if (event.ctrlKey && event.keyCode == 70 || event.keyCode == 116) {
+       if (event.ctrlKey && event.keyCode === 70 || event.keyCode === 116) {
            event.preventDefault();
        }
+   }
+
+   function extractPopupHrefs() {
+       // grab the last hyperlink that has :hover pseudoclass which is the POI InfoWindow "Show in Google Maps" URL
+       var list = document.querySelectorAll(':hover');
+       for (i = list.length - 1; i > -1; i--) {
+           var item = list.item(i);
+           var href = item.getAttribute('href');
+           if (href) {
+               return href;
+           }
+       }
+       return null;
    }
 
    var openStreetMapServerIndex = 0;
@@ -582,6 +524,7 @@ ${tileservers1}
                    mapTypeIds: mapTypeIds,
                    style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
                },
+               scaleControl: true,
                streetViewControl: false,
                draggableCursor: 'default',
                draggingCursor: 'pointer'
@@ -591,6 +534,22 @@ ${tileservers1}
 
 ${tileservers2}
 
+           var stravaheatmapCyclingType = new google.maps.ImageMapType({
+               getTileUrl: function(coord, zoom) {
+                   return "http://globalheat.strava.com/tiles/cycling/color1/" + zoom + "/" + coord.x + "/" + coord.y + ".png";
+               },
+               tileSize: DEFAULT_TILE_SIZE,
+               isPng: true,
+               name: "Cycling database of Strava Heatmap data"
+           });
+           var stravaheatmapRunningType = new google.maps.ImageMapType({
+               getTileUrl: function(coord, zoom) {
+                   return "http://globalheat.strava.com/tiles/running/color1/" + zoom + "/" + coord.x + "/" + coord.y + ".png";
+               },
+               tileSize: DEFAULT_TILE_SIZE,
+               isPng: true,
+               name: "Running database of Strava Heatmap data"
+           });
            var hillshadingMapType = new google.maps.ImageMapType({
                getTileUrl: function(coord, zoom) {
                    return "http://" + getOpenStreetMapServerIndex() + ".tiles.wmflabs.org/hillshading/" + zoom + "/" + coord.x + "/" + coord.y + ".png";
@@ -638,25 +597,31 @@ ${tileservers2}
                scaledSize:new google.maps.Size(12,12), anchor:new google.maps.Point(6,6)};
            addDebug("2. created map: " + map);
 
-           var mapType = '${maptype}';
-           if (mapTypeIds.indexOf(mapType) != -1) {
-               map.setMapTypeId(mapType);
-           }
            google.maps.event.addListener(map, "maptypeid_changed", function() {
                var mapTypeId = map.getMapTypeId();
                var mapCopyright = mapCopyrights[mapTypeId];
 
-               if (mapCopyright == 'OpenStreetMap') {
-                   copyrightControl.innerHTML = 'Map data &copy; <a href="http://www.openstreetmap.org/" target="_blank">OpenStreetMap</a> and contributors <a href="http://creativecommons.org/licenses/by-sa/2.0/" target="_blank">CC-BY-SA</a>';
+               if (mapCopyright == 'Esri') {
+                   copyrightControl.innerHTML = 'Map data &copy; <a href="http://www.esri.com/legal/software-license" target="_blank">Esri, DigitalGlobe, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community</a>';
+               } else if (mapCopyright == 'OpenStreetMap') {
+                   copyrightControl.innerHTML = 'Map data &copy; <a href="http://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> and contributors <a href="http://creativecommons.org/licenses/by-sa/2.0/" target="_blank">CC-BY-SA</a>';
                } else if (mapCopyright == 'OutdoorActive') {
                    copyrightControl.innerHTML = 'Map data &copy; <a href="http://www.outdooractive.com/" target="_blank">OutdoorActive</a>';
+               } else if (mapCopyright == 'Thunderforest') {
+                   copyrightControl.innerHTML = 'Maps &copy; <a href="http://www.thunderforest.com/terms" target="_blank">Thunderforest</a>, Data &copy; <a href="http://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>';
+               } else if (mapCopyright == 'Wanderreitkarte') {
+                   copyrightControl.innerHTML = 'Map data &copy; <a href="http://www.wanderreitkarte.de/" target="_blank">Wanderreitkarte</a>';
                } else if (mapCopyright == 'Google') {
                    copyrightControl.innerHTML = '';
                } else {
                    copyrightControl.innerHTML = 'Missing copyright';
                }
 
-               if (mapTypeId == "OSM Hike"){
+               if (mapTypeId == "Strava Cycling"){
+                   map.overlayMapTypes.setAt(0, stravaheatmapCyclingType);
+               } else if (mapTypeId == "Strava Running"){
+                   map.overlayMapTypes.setAt(0, stravaheatmapRunningType);
+               } else if (mapTypeId == "HikeBikeMap"){
                    map.overlayMapTypes.setAt(0, hillshadingMapType);
                } else if (mapTypeId == "Hike Symbols"){
             	   map.overlayMapTypes.setAt(0, hikingSymbolsMapType);
@@ -668,6 +633,10 @@ ${tileservers2}
 
                callJavaWithUri("map-type-changed/" + mapTypeId);
            });
+           var mapType = '${maptype}';
+           if (mapTypeIds.indexOf(mapType) != -1) {
+               map.setMapTypeId(mapType);
+           }
            addDebug("2. starting with maptype: " + map.getMapTypeId());
 
            var menuItems = {};
@@ -725,7 +694,7 @@ ${menuItems}
            var lastZoom = 0;
            google.maps.event.addListener(map, "zoom_changed", function() {
                var zoom = map.getZoom();
-               if (lastZoom != zoom) {
+               if (lastZoom !== zoom) {
                    lastZoom = zoom;
                    callJavaWithUri("zoom-changed/" + zoom);
                }
@@ -818,7 +787,7 @@ ${menuItems}
                    "<li>Your machine is not connected to the Internet. Check the connection.</li>" +
                    "<li>A personal firewall or proxy blocks the access for RouteConverter. Allow access for RouteConverter.</li>" +
                    "<li>Windows: The Internet Explorer browser fails or is not configured properly. Check the FAQ for help.</li>" +
-                   "<li>Something blocks the access to ${mapserver}. Remove the block.</li>" +
+                   "<li>Something blocks the access to ${mapserverapiurl}. Remove the block.</li>" +
                    "</ol>" +
                    "<p><a href='javascript:self.location.reload()'>Retry</a></p>" +
                    "<h2>Details</h2>" +

@@ -103,6 +103,7 @@ public class Transfer {
     }
 
     public static String trim(String string, int length) {
+        string = trim(string);
         if (string == null)
             return null;
         return string.substring(0, min(string.length(), length));
@@ -112,6 +113,10 @@ public class Transfer {
         string = string.replace('\n', ' ');
         string = string.replace('\r', ' ');
         return string;
+    }
+
+    public static String toLettersAndNumbers(String string) {
+        return string.replaceAll("[^\\w]","");
     }
 
     public static String toMixedCase(String string) {
@@ -259,8 +264,20 @@ public class Transfer {
         return integer == null || integer == 0;
     }
 
+    public static boolean isEmpty(Long aLong) {
+        return aLong == null || aLong == 0;
+    }
+
     public static boolean isEmpty(Double aDouble) {
         return aDouble == null || aDouble == 0.0;
+    }
+
+    public static boolean isEmpty(BigDecimal bigDecimal) {
+        return bigDecimal == null || isEmpty(bigDecimal.doubleValue());
+    }
+
+    public static double toDouble(Double aDouble) {
+        return aDouble == null ? 0.0 : aDouble;
     }
 
     public static int[] toArray(List<Integer> integers) {
@@ -273,12 +290,15 @@ public class Transfer {
 
     public static String encodeUri(String uri) {
         try {
-            String encoded = URLEncoder.encode(uri, UTF8_ENCODING);
-            return encoded.replace("%2F", "/"); // better not .replace("%3A", ":");
+            return URLEncoder.encode(uri, UTF8_ENCODING);
         } catch (UnsupportedEncodingException e) {
             log.severe("Cannot encode uri " + uri + ": " + e);
             return uri;
         }
+    }
+
+    public static String encodeUriButKeepSlashes(String uri) {
+        return encodeUri(uri).replace("%2F", "/"); // better not .replace("%3A", ":");
     }
 
     public static String decodeUri(String uri) {
@@ -347,7 +367,7 @@ public class Transfer {
         return fromMillis(gregorianCalendar.getTimeInMillis());
     }
 
-    private static DatatypeFactory datatypeFactory = null;
+    private static DatatypeFactory datatypeFactory;
 
     private static synchronized DatatypeFactory getDataTypeFactory() throws DatatypeConfigurationException {
         if (datatypeFactory == null) {

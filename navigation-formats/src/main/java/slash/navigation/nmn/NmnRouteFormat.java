@@ -206,7 +206,7 @@ public class NmnRouteFormat extends SimpleFormat<Wgs84Route> {
             }
 
             List<NavigationPosition> positions = new ArrayList<>();
-            int readedPositions = 0;
+            int readPositions = 0;
             //Ws ist möglich, dass bei einer "Position" überhaupt keine Koordinaten da
             //sind. Dieser Punkt muss trotzdem am Ende mitgezählt werden für die Anzahl.
             //Daher nicht am Ende positions.size() == expectedPositionCount testen
@@ -214,10 +214,10 @@ public class NmnRouteFormat extends SimpleFormat<Wgs84Route> {
                 Wgs84Position position = readPosition(fileContent);
                 if (position != null)
                     positions.add(position);
-                readedPositions++;
+                readPositions++;
             }
 
-            if (readedPositions == expectedPositionCount)
+            if (readPositions == expectedPositionCount)
                 context.appendRoute(createRoute(Route, null, positions));
         }
     }
@@ -288,6 +288,8 @@ public class NmnRouteFormat extends SimpleFormat<Wgs84Route> {
           n byte Text
          */
         long blockLength = byteBuffer.getLong();
+        if ((byteBuffer.remaining() == 0) || (blockLength == 0))
+            return positionPoint;
         int startPosition = byteBuffer.position();
         String waypointDescription = getText(byteBuffer);
 
@@ -457,8 +459,7 @@ public class NmnRouteFormat extends SimpleFormat<Wgs84Route> {
                     }
                     break;
                 case 0x2:
-                    //8 byte ??
-                    byteBuffer.getLong();
+                    getText(byteBuffer); //firstname??
                     break;
                 case 0x5:
                     // unknown 5 bytes

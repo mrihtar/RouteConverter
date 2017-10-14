@@ -28,7 +28,6 @@ import slash.navigation.common.DegreeFormat;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.common.UnitSystem;
 import slash.navigation.converter.gui.RouteConverter;
-import slash.navigation.converter.gui.models.StringModel;
 
 import java.io.File;
 import java.text.ParseException;
@@ -62,6 +61,7 @@ public class PositionHelper {
     private static final int MEGA_BYTE = KILO_BYTE * KILO_BYTE;
 
     public static String formatDistance(Double distance) {
+        // don't use isEmpty(distance) here since a 0.0 makes sense to display
         if (distance == null || distance <= 0.0)
             return "";
         UnitSystem unitSystem = RouteConverter.getInstance().getUnitSystemModel().getUnitSystem();
@@ -78,8 +78,8 @@ public class PositionHelper {
         if (elevation == null)
             return "";
         UnitSystem unitSystem = RouteConverter.getInstance().getUnitSystemModel().getUnitSystem();
-        double distanceInUnit = unitSystem.valueToUnit(elevation);
-        return format("%d %s", round(distanceInUnit), unitSystem.getElevationName());
+        double elevationInUnit = unitSystem.valueToUnit(elevation);
+        return format("%d %s", round(elevationInUnit), unitSystem.getElevationName());
     }
 
     public static String extractElevation(NavigationPosition position) {
@@ -134,8 +134,8 @@ public class PositionHelper {
     }
 
     private static String formatDateTime(CompactCalendar time) {
-        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
-        return getDateTimeFormat(timeZone.getString()).format(time.getTime());
+        String timeZoneId = RouteConverter.getInstance().getTimeZone().getTimeZoneId();
+        return getDateTimeFormat(timeZoneId).format(time.getTime());
     }
 
     public static String extractDateTime(NavigationPosition position) {
@@ -150,7 +150,7 @@ public class PositionHelper {
     }
 
     public static String formatDate(CompactCalendar time) {
-        return formatDate(time, RouteConverter.getInstance().getTimeZone().getString());
+        return formatDate(time, RouteConverter.getInstance().getTimeZone().getTimeZoneId());
     }
 
     public static String extractDate(NavigationPosition position) {
@@ -165,7 +165,7 @@ public class PositionHelper {
     }
 
     public static String formatTime(CompactCalendar time) {
-        return formatTime(time, RouteConverter.getInstance().getTimeZone().getString());
+        return formatTime(time, RouteConverter.getInstance().getTimeZone().getTimeZoneId());
     }
 
     public static String extractTime(NavigationPosition position) {
@@ -179,8 +179,8 @@ public class PositionHelper {
     }
 
     public static CompactCalendar parseDateTime(String stringValue) throws ParseException {
-        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
-        return parseDateTime(stringValue, timeZone.getString());
+        String timeZoneId = RouteConverter.getInstance().getTimeZone().getTimeZoneId();
+        return parseDateTime(stringValue, timeZoneId);
     }
 
     private static CompactCalendar parseDate(String stringValue, String timeZonePreference) throws ParseException {
@@ -189,8 +189,8 @@ public class PositionHelper {
     }
 
     public static CompactCalendar parseDate(String stringValue) throws ParseException {
-        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
-        return parseDate(stringValue, timeZone.getString());
+        String timeZoneId = RouteConverter.getInstance().getTimeZone().getTimeZoneId();
+        return parseDate(stringValue, timeZoneId);
     }
 
     private static CompactCalendar parseTime(String stringValue, String timeZonePreference) throws ParseException {
@@ -199,8 +199,8 @@ public class PositionHelper {
     }
 
     public static CompactCalendar parseTime(String stringValue) throws ParseException {
-        StringModel timeZone = RouteConverter.getInstance().getTimeZone();
-        return parseTime(stringValue, timeZone.getString());
+        String timeZoneId = RouteConverter.getInstance().getTimeZone().getTimeZoneId();
+        return parseTime(stringValue, timeZoneId);
     }
 
     private static long toNextUnit(Long size, long nextUnit) {

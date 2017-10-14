@@ -136,11 +136,11 @@ class PositionReducer {
     int getMaximumSegmentLength(RouteCharacteristics characteristics) {
         switch (characteristics) {
             case Route:
-                return preferences.getInt("maximumRouteSegmentLength", 8);
+                return preferences.getInt("maximumRouteSegmentLength", 24);
             case Track:
-                return preferences.getInt("maximumTrackSegmentLength", 35);
+                return preferences.getInt("maximumTrackSegmentLength", 40);
             case Waypoints:
-                return preferences.getInt("maximumWaypointSegmentLength", 10);
+                return preferences.getInt("maximumWaypointSegmentLength", 15);
             default:
                 throw new IllegalArgumentException("RouteCharacteristics " + characteristics + " is not supported");
         }
@@ -167,14 +167,11 @@ class PositionReducer {
 
     private List<NavigationPosition> reducePositions(List<NavigationPosition> positions, int zoom, RouteCharacteristics characteristics, boolean showWaypointDescription) {
         int maximumPositionCount = getMaximumPositionCount(characteristics, showWaypointDescription);
+        int positionCountBeforeReduction = positions.size();
 
         // reduce the number of result to those that are visible for tracks and waypoint lists
-        if (positions.size() > maximumPositionCount && !characteristics.equals(Route)) {
+        if (positions.size() > maximumPositionCount && !characteristics.equals(Route))
             positions = filterVisiblePositions(positions, zoom);
-            visible = new BoundingBox(positions);
-        } else {
-            visible = null;
-        }
 
         // reduce the number of result by selecting every Nth to limit significance computation time
         int maximumSignificantPositionCount = preferences.getInt("maximumSignificantPositionCount", 50000);
@@ -188,6 +185,13 @@ class PositionReducer {
         // reduce the number of result to ensure browser stability
         if (positions.size() > maximumPositionCount)
             positions = filterEveryNthPosition(positions, maximumPositionCount);
+
+        int positionCountAfterReduction = positions.size();
+        if (positionCountAfterReduction < positionCountBeforeReduction) {
+            visible = new BoundingBox(positions);
+        } else {
+            visible = null;
+        }
 
         return positions;
     }
@@ -265,7 +269,7 @@ class PositionReducer {
         for (int i = firstIndex; i < lastIndex; i += 1) {
             NavigationPosition position = positions.get(i);
             if(!position.hasCoordinates())
-                continue;;
+                continue;
 
             boolean visible = boundingBox.contains(position);
             if (visible) {

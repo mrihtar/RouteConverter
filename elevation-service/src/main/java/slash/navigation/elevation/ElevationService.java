@@ -35,7 +35,7 @@ import java.util.List;
 public interface ElevationService {
     String getName();
     boolean isDownload();
-    boolean isSupportsPath();
+    boolean isOverQueryLimit();
     String getPath();
     void setPath(String path);
 

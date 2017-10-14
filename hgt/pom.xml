@@ -2,11 +2,11 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>hgt</artifactId>
     <packaging>jar</packaging>
-    <name>Access to elevation data from HGT files</name>
+    <name>Read elevation data from HGT files</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

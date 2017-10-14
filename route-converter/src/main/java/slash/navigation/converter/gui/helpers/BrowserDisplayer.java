@@ -71,7 +71,7 @@ import static javax.swing.text.StyleConstants.*;
  * JHContentViewer. It invokes default IDE html browser to show external URL.
  * (Default browser should be external browser to show external URL properly.
  * Component is displayed as a mouse enabled Label. Only text is supported.
- * <p/>
+ *
  * To use this class within HTML content use the &ltobject&gt tag. Below is an
  * example usage:
  * <p><pre>
@@ -137,9 +137,9 @@ public class BrowserDisplayer extends JButton implements ActionListener, ViewAwa
         textAttribs.removeAttribute(Bold);
         textAttribs.removeAttribute(Italic);
         textAttribs.addAttribute(FontFamily, font.getName());
-        textAttribs.addAttribute(FontSize, new Integer(font.getSize()));
-        textAttribs.addAttribute(Bold, Boolean.valueOf(font.isBold()));
-        textAttribs.addAttribute(Italic, Boolean.valueOf(font.isItalic()));
+        textAttribs.addAttribute(FontSize, font.getSize());
+        textAttribs.addAttribute(Bold, font.isBold());
+        textAttribs.addAttribute(Italic, font.isItalic());
     }
 
     public String getContent() {
@@ -221,8 +221,7 @@ public class BrowserDisplayer extends JButton implements ActionListener, ViewAwa
             return;
         }
         textAttribs.removeAttribute(FontSize);
-        textAttribs.addAttribute(FontSize,
-                new Integer(newsize));
+        textAttribs.addAttribute(FontSize, newsize);
         setFont(getAttributeSetFont(textAttribs));
         Font font = getFont();
     }
@@ -234,7 +233,7 @@ public class BrowserDisplayer extends JButton implements ActionListener, ViewAwa
     public void setTextFontWeight(String weight) {
         boolean isBold = "bold".equals(weight);
         textAttribs.removeAttribute(Bold);
-        textAttribs.addAttribute(Bold, Boolean.valueOf(isBold));
+        textAttribs.addAttribute(Bold, isBold);
         setFont(getAttributeSetFont(textAttribs));
         Font font = getFont();
     }
@@ -249,7 +248,7 @@ public class BrowserDisplayer extends JButton implements ActionListener, ViewAwa
     public void setTextFontStyle(String style) {
         boolean isItalic = "italic".equals(style);
         textAttribs.removeAttribute(Italic);
-        textAttribs.addAttribute(Italic, Boolean.valueOf(isItalic));
+        textAttribs.addAttribute(Italic, isItalic);
         setFont(getAttributeSetFont(textAttribs));
         Font font = getFont();
     }

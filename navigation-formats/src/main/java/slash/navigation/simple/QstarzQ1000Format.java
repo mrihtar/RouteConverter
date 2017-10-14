@@ -31,7 +31,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static java.lang.Math.abs;
-import static slash.common.io.Transfer.formatDoubleAsString;
 import static slash.common.io.Transfer.*;
 import static slash.common.type.CompactCalendar.createDateFormat;
 import static slash.common.type.CompactCalendar.parseDate;
@@ -41,7 +40,7 @@ import static slash.navigation.common.NavigationConversion.*;
 /**
  * Reads and writes Qstarz BT-Q1000 (.csv) files.
  *
- * Header: INDEX,RCR,DATE,TIME,VALID,LATITUDE,N/S,LONGITUDE,E/W,HEIGHT,SPEED,HDOP,NSAT (USED/VIEW),DISTANCE,<br/>
+ * Header: INDEX,RCR,DATE,TIME,VALID,LATITUDE,N/S,LONGITUDE,E/W,HEIGHT,SPEED,HDOP,NSAT (USED/VIEW),DISTANCE,
  * Format: 8,T,2010/12/28,23:01:43,SPS,49.126389,N,8.614000,E,245.512 m,0.759 km/h,1.4,8(10),0.22 m,
  *
  * @author Christian Pesch
@@ -159,7 +158,7 @@ public class QstarzQ1000Format extends SimpleLineBasedFormat<SimpleRoute> {
         return createDateFormat(DATE_FORMAT).format(date.getTime());
     }
 
-    private Wgs84Position previousPosition = null;
+    private Wgs84Position previousPosition;
 
     protected void writePosition(Wgs84Position position, PrintWriter writer, int index, boolean firstPosition) {
         String date = formatDate(position.getTime());

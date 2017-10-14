@@ -71,17 +71,13 @@ public class ExternalPrograms {
         startBrowser(window, "https://hosted.weblate.org/engage/routeconverter/");
     }
 
-    public static void startBrowserForTimeAlbumSupport(Window window) {
-        startMail(window, "mailto:columbus-service@hotmail.com");
+    public static void startBrowserForTimeAlbumProSupport(Window window) {
+        startMail(window, "mailto:columbusservice@hotmail.com");
     }
 
     public static void startBrowserForRouteConverterForum(Window window) {
-        startBrowser(window, isGerman() ? "http://forum.routeconverter.de/forum-4.html" :
-                "http://forum.routeconverter.com/forum-12.html");
-    }
-
-    public static void startBrowserForGeonames(Window window) {
-        startBrowser(window, "http://www.geonames.org/");
+        startBrowser(window, isGerman() ? "https://forum.routeconverter.de/forum-4.html" :
+                "https://forum.routeconverter.com/forum-12.html");
     }
 
     public static void startBrowserForDouglasPeucker(Window window) {
@@ -89,6 +85,18 @@ public class ExternalPrograms {
                 "http://de.wikipedia.org/wiki/Douglas-Peucker-Algorithmus" :
                 "http://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm";
         startBrowser(window, url);
+    }
+
+    public static void startBrowserForGoogleApiKey(Window window) {
+        startBrowser(window, "https://developers.google.com/maps/documentation/javascript/get-api-key");
+    }
+
+    public static void startBrowserForThunderforestApiKey(Window window) {
+        startBrowser(window, "https://www.thunderforest.com/docs/apikeys");
+    }
+
+    public static void startBrowserForGeonamesUserName(Window window) {
+        startBrowser(window, "http://www.geonames.org/login");
     }
 
     public static void startBrowserForJava(Window window) {

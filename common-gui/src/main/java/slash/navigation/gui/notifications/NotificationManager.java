@@ -33,7 +33,7 @@ import static java.lang.System.currentTimeMillis;
 import static javax.swing.BorderFactory.createEtchedBorder;
 import static slash.common.helpers.ThreadHelper.invokeInAwtEventQueue;
 import static slash.common.helpers.ThreadHelper.safeJoin;
-import static slash.navigation.gui.helpers.UIHelper.getFrame;
+import static slash.navigation.gui.helpers.WindowHelper.getFrame;
 
 /**
  * Manages the notifications of an {@link Application}.
@@ -49,9 +49,9 @@ public class NotificationManager {
 
     private static final Object notificationMutex = new Object();
     private boolean running = true;
-    private long lastEvent = 0;
-    private String nextMessage = null;
-    private Action nextAction = null;
+    private long lastEvent;
+    private String nextMessage;
+    private Action nextAction;
     private Thread notificationUpdater;
 
     public NotificationManager() {

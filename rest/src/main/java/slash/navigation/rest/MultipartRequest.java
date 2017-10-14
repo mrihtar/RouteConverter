@@ -33,7 +33,7 @@ import static org.apache.http.Consts.UTF_8;
 import static org.apache.http.HttpHeaders.ACCEPT;
 import static org.apache.http.HttpHeaders.LOCATION;
 import static org.apache.http.entity.ContentType.APPLICATION_OCTET_STREAM;
-import static slash.common.io.Transfer.encodeUri;
+import static slash.common.io.Transfer.encodeUriButKeepSlashes;
 
 /**
  * Wrapper for a HTTP Multipart Request.
@@ -44,7 +44,7 @@ import static slash.common.io.Transfer.encodeUri;
 abstract class MultipartRequest extends HttpRequest {
     private static final ContentType TEXT_PLAIN_UTF8 = ContentType.create("text/plain", UTF_8);
     private MultipartEntityBuilder builder;
-    private boolean containsFileLargerThan4k = false;
+    private boolean containsFileLargerThan4k;
 
     MultipartRequest(HttpEntityEnclosingRequestBase method, Credentials credentials) {
         super(method, credentials);
@@ -60,20 +60,20 @@ abstract class MultipartRequest extends HttpRequest {
         return (HttpEntityEnclosingRequestBase) getMethod();
     }
 
-    public void addString(String name, String value) throws UnsupportedEncodingException {
+    public void addString(String name, String value) {
         getBuilder().addTextBody(name, value, TEXT_PLAIN_UTF8);
     }
 
-    public void addFile(String name, File value) throws IOException {
+    public void addFile(String name, File value) {
         if (value.exists() && value.length() > 4096)
             containsFileLargerThan4k = true;
-        getBuilder().addBinaryBody(name, value, APPLICATION_OCTET_STREAM, encodeUri(value.getName()));
+        getBuilder().addBinaryBody(name, value, APPLICATION_OCTET_STREAM, encodeUriButKeepSlashes(value.getName()));
     }
 
-    public void addFile(String name, byte[] value) throws IOException {
+    public void addFile(String name, byte[] value) {
         if (value.length > 4096)
             containsFileLargerThan4k = true;
-        getBuilder().addBinaryBody(name, value, APPLICATION_OCTET_STREAM, encodeUri(name + ".xml"));
+        getBuilder().addBinaryBody(name, value, APPLICATION_OCTET_STREAM, encodeUriButKeepSlashes(name + ".xml"));
     }
 
     protected boolean throwsSocketExceptionIfUnAuthorized() {

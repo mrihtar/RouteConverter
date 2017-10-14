@@ -2,11 +2,11 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>route</artifactId>
     <packaging>jar</packaging>
-    <name>Access to the RouteCatalog service</name>
+    <name>Access the RouteCatalog service</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

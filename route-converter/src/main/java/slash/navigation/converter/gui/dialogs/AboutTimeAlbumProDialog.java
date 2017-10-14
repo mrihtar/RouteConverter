@@ -40,9 +40,9 @@ import static java.text.MessageFormat.format;
 import static javax.swing.JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static slash.feature.client.Feature.getFeature;
-import static slash.navigation.converter.gui.helpers.ExternalPrograms.startBrowserForGeonames;
-import static slash.navigation.converter.gui.helpers.ExternalPrograms.startBrowserForTimeAlbumSupport;
+import static slash.navigation.converter.gui.helpers.ExternalPrograms.startBrowserForTimeAlbumProSupport;
 import static slash.navigation.converter.gui.helpers.ExternalPrograms.startBrowserForTimeAlbumProDownload;
+import static slash.navigation.gui.helpers.JMenuHelper.setMnemonic;
 
 /**
  * Dialog to show information about the program.
@@ -54,7 +54,6 @@ public class AboutTimeAlbumProDialog extends SimpleDialog {
     private JPanel contentPane;
     private JLabel labelAbout;
     private JLabel labelContact;
-    private JLabel labelCredit;
     private JLabel labelFeature;
     private JButton buttonClose;
 
@@ -74,13 +73,7 @@ public class AboutTimeAlbumProDialog extends SimpleDialog {
 
         labelContact.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent me) {
-                startBrowserForTimeAlbumSupport(r.getFrame());
-            }
-        });
-
-        labelCredit.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent me) {
-                startBrowserForGeonames(r.getFrame());
+                startBrowserForTimeAlbumProSupport(r.getFrame());
             }
         });
 
@@ -90,6 +83,7 @@ public class AboutTimeAlbumProDialog extends SimpleDialog {
             labelFeature.setVisible(true);
         }
 
+        setMnemonic(buttonClose, "close-mnemonic");
         buttonClose.addActionListener(new DialogAction(this) {
             public void run() {
                 close();
@@ -132,7 +126,7 @@ public class AboutTimeAlbumProDialog extends SimpleDialog {
         contentPane = new JPanel();
         contentPane.setLayout(new GridLayoutManager(1, 1, new Insets(10, 10, 10, 10), -1, -1));
         final JPanel panel1 = new JPanel();
-        panel1.setLayout(new GridLayoutManager(6, 1, new Insets(3, 3, 3, 3), -1, -1));
+        panel1.setLayout(new GridLayoutManager(5, 1, new Insets(3, 3, 3, 3), -1, -1));
         contentPane.add(panel1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         labelAbout = new JLabel();
         this.$$$loadLabelText$$$(labelAbout, ResourceBundle.getBundle("slash/navigation/converter/gui/RouteConverter").getString("about-timealbum-pro"));
@@ -140,22 +134,19 @@ public class AboutTimeAlbumProDialog extends SimpleDialog {
         labelContact = new JLabel();
         this.$$$loadLabelText$$$(labelContact, ResourceBundle.getBundle("slash/navigation/converter/gui/RouteConverter").getString("about-timealbum-contact"));
         panel1.add(labelContact, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        labelCredit = new JLabel();
-        this.$$$loadLabelText$$$(labelCredit, ResourceBundle.getBundle("slash/navigation/converter/gui/RouteConverter").getString("about-credit"));
-        panel1.add(labelCredit, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         labelFeature = new JLabel();
         labelFeature.setVisible(false);
-        panel1.add(labelFeature, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel1.add(labelFeature, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel2 = new JPanel();
         panel2.setLayout(new GridLayoutManager(1, 2, new Insets(3, 0, 1, 0), -1, -1));
-        panel1.add(panel2, new GridConstraints(5, 0, 1, 1, GridConstraints.ANCHOR_NORTH, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel1.add(panel2, new GridConstraints(4, 0, 1, 1, GridConstraints.ANCHOR_NORTH, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         buttonClose = new JButton();
         this.$$$loadButtonText$$$(buttonClose, ResourceBundle.getBundle("slash/navigation/converter/gui/RouteConverter").getString("close"));
         panel2.add(buttonClose, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final Spacer spacer1 = new Spacer();
         panel2.add(spacer1, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, 1, null, null, null, 0, false));
         final JSeparator separator1 = new JSeparator();
-        panel1.add(separator1, new GridConstraints(4, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        panel1.add(separator1, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
     }
 
     /**

@@ -20,16 +20,13 @@
 
 package slash.navigation.mapview.browser;
 
+import slash.common.helpers.APIKeyRegistry;
 import slash.common.io.TokenResolver;
 import slash.common.type.CompactCalendar;
-import slash.common.type.HexadecimalNumber;
 import slash.navigation.base.*;
 import slash.navigation.columbus.ColumbusGpsBinaryFormat;
 import slash.navigation.columbus.ColumbusGpsFormat;
-import slash.navigation.common.BoundingBox;
-import slash.navigation.common.NavigationPosition;
-import slash.navigation.common.PositionPair;
-import slash.navigation.common.SimpleNavigationPosition;
+import slash.navigation.common.*;
 import slash.navigation.converter.gui.models.*;
 import slash.navigation.gui.Application;
 import slash.navigation.mapview.AbstractMapViewListener;
@@ -37,6 +34,7 @@ import slash.navigation.mapview.MapView;
 import slash.navigation.mapview.MapViewCallback;
 import slash.navigation.mapview.MapViewListener;
 import slash.navigation.mapview.tileserver.TileServerService;
+import slash.navigation.mapview.tileserver.binding.CopyrightType;
 import slash.navigation.mapview.tileserver.binding.TileServerType;
 import slash.navigation.nmn.NavigatingPoiWarnerFormat;
 
@@ -64,23 +62,27 @@ import static java.lang.Character.isLetterOrDigit;
 import static java.lang.Character.isWhitespace;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
+import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
 import static java.lang.Thread.sleep;
 import static java.util.Arrays.asList;
 import static java.util.Calendar.SECOND;
+import static java.util.Collections.sort;
 import static java.util.concurrent.Executors.newCachedThreadPool;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.SwingUtilities.invokeLater;
 import static javax.swing.event.ListDataEvent.CONTENTS_CHANGED;
 import static javax.swing.event.TableModelEvent.*;
+import static org.apache.commons.lang.StringEscapeUtils.escapeHtml;
 import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
+import static slash.common.helpers.ThreadHelper.createSingleThreadExecutor;
 import static slash.common.helpers.ThreadHelper.safeJoin;
 import static slash.common.io.Externalization.extractFile;
 import static slash.common.io.Transfer.*;
 import static slash.common.type.CompactCalendar.fromCalendar;
-import static slash.common.type.HexadecimalNumber.encodeColor;
+import static slash.common.type.HexadecimalNumber.encodeByte;
 import static slash.navigation.base.RouteCharacteristics.*;
 import static slash.navigation.base.WaypointType.*;
 import static slash.navigation.converter.gui.models.CharacteristicsModel.IGNORE;
@@ -89,7 +91,8 @@ import static slash.navigation.converter.gui.models.FixMapMode.Yes;
 import static slash.navigation.converter.gui.models.PositionColumns.*;
 import static slash.navigation.gui.events.Range.asRange;
 import static slash.navigation.gui.helpers.JTableHelper.isFirstToLastRow;
-import static slash.navigation.mapview.MapViewConstants.*;
+import static slash.navigation.mapview.MapViewConstants.ROUTE_LINE_WIDTH_PREFERENCE;
+import static slash.navigation.mapview.MapViewConstants.TRACK_LINE_WIDTH_PREFERENCE;
 import static slash.navigation.mapview.browser.TransformUtil.delta;
 import static slash.navigation.mapview.browser.TransformUtil.isPositionInChina;
 
@@ -106,6 +109,7 @@ public abstract class BrowserMapView implements MapView {
 
     private static final String MAP_TYPE_PREFERENCE = "mapType";
     protected static final String DEBUG_PREFERENCE = "debug";
+    protected static final String BROWSER_SCALE_FACTOR_PREFERENCE = "browserScaleFactor";
     private static final String CLEAN_ELEVATION_ON_MOVE_PREFERENCE = "cleanElevationOnMove";
     private static final String COMPLEMENT_ELEVATION_ON_MOVE_PREFERENCE = "complementElevationOnMove";
     private static final String CLEAN_TIME_ON_MOVE_PREFERENCE = "cleanTimeOnMove";
@@ -127,11 +131,11 @@ public abstract class BrowserMapView implements MapView {
     private Thread positionListUpdater, selectionUpdater, callbackListener, callbackPoller;
 
     protected final Object notificationMutex = new Object();
-    protected boolean initialized = false;
-    private boolean running = true, haveToInitializeMapOnFirstStart = true, haveToRepaintSelectionImmediately = false,
-            haveToRepaintRouteImmediately = false, haveToRecenterMap = false,
-            haveToUpdateRoute = false, haveToReplaceRoute = false,
-            haveToRepaintSelection = false, ignoreNextZoomCallback = false;
+    protected boolean initialized;
+    private boolean running = true, haveToInitializeMapOnFirstStart = true, haveToRepaintSelectionImmediately,
+            haveToRepaintRouteImmediately, haveToRecenterMap,
+            haveToUpdateRoute, haveToReplaceRoute,
+            haveToRepaintSelection, ignoreNextZoomCallback;
 
     private BooleanModel showAllPositionsAfterLoading;
     private BooleanModel recenterAfterZooming;
@@ -156,7 +160,7 @@ public abstract class BrowserMapView implements MapView {
     protected MapViewCallback mapViewCallback;
     private PositionReducer positionReducer;
     private final ExecutorService executor = newCachedThreadPool();
-    private int overQueryLimitCount = 0, zeroResultsCount = 0;
+    private int overQueryLimitCount, zeroResultsCount;
 
     // initialization
 
@@ -169,8 +173,8 @@ public abstract class BrowserMapView implements MapView {
                            BooleanModel showCoordinates,
                            BooleanModel showWaypointDescription,
                            FixMapModeModel fixMapModeModel,
-                           ColorModel routeColorModel,
-                           ColorModel trackColorModel,
+                           ColorModel aRouteColorModel,
+                           ColorModel aTrackColorModel,
                            UnitSystemModel unitSystemModel,
                            GoogleMapsServerModel googleMapsServerModel) {
         this.positionsModel = positionsModel;
@@ -183,8 +187,8 @@ public abstract class BrowserMapView implements MapView {
         this.showCoordinates = showCoordinates;
         this.showWaypointDescription = showWaypointDescription;
         this.fixMapModeModel = fixMapModeModel;
-        this.routeColorModel = routeColorModel;
-        this.trackColorModel = trackColorModel;
+        this.routeColorModel = aRouteColorModel;
+        this.trackColorModel = aTrackColorModel;
         this.unitSystemModel = unitSystemModel;
         this.googleMapsServerModel = googleMapsServerModel;
 
@@ -192,7 +196,7 @@ public abstract class BrowserMapView implements MapView {
 
         positionsModel.addTableModelListener(positionsModelListener);
         characteristicsModel.addListDataListener(characteristicsModelListener);
-        mapViewCallback.addChangeListener(mapViewCallbackListener);
+        mapViewCallback.addRoutingServiceChangeListener(mapViewCallbackListener);
         showCoordinates.addChangeListener(showCoordinatesListener);
         showWaypointDescription.addChangeListener(showWaypointDescriptionListener);
         fixMapModeModel.addChangeListener(repaintPositionListListener);
@@ -219,6 +223,10 @@ public abstract class BrowserMapView implements MapView {
     protected abstract void initializeBrowser();
     protected abstract void initializeWebPage();
 
+    protected double getBrowserScaleFactor() {
+        return (double) preferences.getInt(BROWSER_SCALE_FACTOR_PREFERENCE, 100) / 100.0;
+    }
+
     protected String getGoogleMapsServerApiUrl() {
         return googleMapsServerModel.getGoogleMapsServer().getApiUrl();
     }
@@ -239,6 +247,8 @@ public abstract class BrowserMapView implements MapView {
                     return googleMapsServerModel.getGoogleMapsServer().getFileUrl();
                 if (tokenName.equals("maptype"))
                     return getMapType();
+                if (tokenName.equals("googleapikey"))
+                    return APIKeyRegistry.getInstance().getAPIKey("google", "map");
                 if (tokenName.equals("tileservers1"))
                     return registerTileServers(tileServerService, true);
                 if (tokenName.equals("tileservers2"))
@@ -251,6 +261,7 @@ public abstract class BrowserMapView implements MapView {
         if (html == null)
             throw new IllegalArgumentException("Cannot extract routeconverter.html");
 
+        extractFile(RESOURCES_PACKAGE + "routeconverter.css");
         extractFile(RESOURCES_PACKAGE + "jquery.min.js");
         extractFile(RESOURCES_PACKAGE + "contextmenu.js");
         extractFile(RESOURCES_PACKAGE + "keydragzoom.js");
@@ -262,7 +273,7 @@ public abstract class BrowserMapView implements MapView {
 
     protected void tryToInitialize(int count, long start) {
         boolean initialized = getComponent() != null && isMapInitialized();
-        synchronized (this) {
+        synchronized (INITIALIZED_LOCK) {
             this.initialized = initialized;
         }
         log.fine("Initialized map: " + initialized);
@@ -306,7 +317,7 @@ public abstract class BrowserMapView implements MapView {
         update(true, false);
     }
 
-    private Throwable initializationCause = null;
+    private Throwable initializationCause;
 
     public Throwable getInitializationCause() {
         return initializationCause;
@@ -316,14 +327,32 @@ public abstract class BrowserMapView implements MapView {
         this.initializationCause = initializationCause;
     }
 
+    private static final Object INITIALIZED_LOCK = new Object();
+
     public boolean isInitialized() {
-        synchronized (this) {
+        synchronized (INITIALIZED_LOCK) {
             return initialized;
         }
     }
 
     public boolean isDownload() {
         return false;
+    }
+
+    public String getMapsPath() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void setMapsPath(String path) {
+        throw new UnsupportedOperationException();
+    }
+
+    public String getThemesPath() {
+        throw new UnsupportedOperationException();
+    }
+
+    public void setThemesPath(String path) {
+        throw new UnsupportedOperationException();
     }
 
     protected void initializeBrowserInteraction() {
@@ -514,8 +543,7 @@ public abstract class BrowserMapView implements MapView {
                                 try {
                                     processStream(socket);
                                 } catch (IOException e) {
-                                    e.printStackTrace();
-                                    log.severe("Cannot process stream from callback listener socket: " + e);
+                                    log.severe(format("Cannot process stream from callback listener socket: %s, %s ", e, printStackTrace(e)));
                                 }
                             }
                         });
@@ -651,7 +679,7 @@ public abstract class BrowserMapView implements MapView {
         return preferences.get(MAP_TYPE_PREFERENCE, "google.maps.MapTypeId.ROADMAP");
     }
 
-    private boolean isGoogleMap() {
+    private boolean isGoogleFixMap() {
         String mapType = getMapType();
         return mapType != null && GOOGLE_MAP_TYPES.contains(mapType.toUpperCase());
     }
@@ -689,18 +717,24 @@ public abstract class BrowserMapView implements MapView {
                         append("mapCopyrights[google.maps.MapTypeId.").append(tileServerId).append("] = \"Google\";\n");
         }
 
+        String apiKey = APIKeyRegistry.getInstance().getAPIKey("thunderforest", "map");
         for (TileServerType tileServer : tileServerService.getTileServers()) {
-            if (tileServer.isActive() != null && !tileServer.isActive())
+            if (tileServer.getActive() != null && !tileServer.getActive())
                 continue;
 
-            if (register)
+            if (register) {
+                CopyrightType copyrightType = tileServer.getCopyright();
                 buffer.append("mapTypeIds.push(\"").append(tileServer.getId()).append("\"); ").
                         append("mapCopyrights[\"").append(tileServer.getId()).append("\"] = \"").
-                        append(tileServer.getCopyright().value()).append("\";\n");
-            else
+                        append(copyrightType != null ? copyrightType.value() : "unknown").append("\";\n");
+            }
+            else {
                 buffer.append("map.mapTypes.set(\"").append(tileServer.getId()).append("\", new google.maps.ImageMapType({\n").
                         append("  getTileUrl: function(coordinates, zoom) {\n").
-                        append("    return ").append(trim(trimLineFeeds(tileServer.getValue()))).append(";\n").
+                        append("    return ").append(trim(trimLineFeeds(tileServer.getValue())));
+                if (apiKey != null)
+                    buffer.append(" + \"?apikey=").append(apiKey).append("\"");
+                buffer.append(";\n").
                         append("  },\n").
                         append("  tileSize: DEFAULT_TILE_SIZE,\n").
                         append("  minZoom: ").append(tileServer.getMinZoom()).append(",\n").
@@ -708,6 +742,7 @@ public abstract class BrowserMapView implements MapView {
                         append("  alt: \"").append(tileServer.getName()).append("\",\n").
                         append("  name: \"").append(tileServer.getId()).append("\"\n").
                         append("}));\n");
+            }
         }
 
         return buffer.toString();
@@ -722,7 +757,7 @@ public abstract class BrowserMapView implements MapView {
         ResourceBundle bundle = Application.getInstance().getContext().getBundle();
         for (String menuItemKey : MENU_ITEM_KEYS)
             buffer.append("menuItems[\"").append(menuItemKey).append("\"] = ").
-                    append("\"").append(bundle.getString(menuItemKey)).append("\";\n");
+                    append("\"").append(escapeHtml(bundle.getString(menuItemKey))).append("\";\n");
 
         return buffer.toString();
    }
@@ -734,7 +769,7 @@ public abstract class BrowserMapView implements MapView {
 
     // resizing
 
-    private boolean hasBeenResizedToInvisible = false;
+    private boolean hasBeenResizedToInvisible;
 
     public void resize() {
         if (!isInitialized() || !getComponent().isShowing())
@@ -761,8 +796,9 @@ public abstract class BrowserMapView implements MapView {
 
     private void resizeMap() {
         synchronized (notificationMutex) {
-            int width = max(getComponent().getWidth(), 0);
-            int height = max(getComponent().getHeight(), 0);
+            double browserScaleFactor = getBrowserScaleFactor();
+            int width = (int) max(getComponent().getWidth() / browserScaleFactor, 0.0);
+            int height = (int) max(getComponent().getHeight() / browserScaleFactor, 0.0);
             if (width != lastWidth || height != lastHeight) {
                 executeScript("resize(" + width + "," + height + ");");
             }
@@ -777,7 +813,7 @@ public abstract class BrowserMapView implements MapView {
         if(positionsModel != null) {
             positionsModel.removeTableModelListener(positionsModelListener);
             characteristicsModel.removeListDataListener(characteristicsModelListener);
-            mapViewCallback.removeChangeListener(mapViewCallbackListener);
+            mapViewCallback.removeRoutingServiceChangeListener(mapViewCallbackListener);
             showCoordinates.removeChangeListener(showCoordinatesListener);
             showWaypointDescription.removeChangeListener(showWaypointDescriptionListener);
             fixMapModeModel.removeChangeListener(repaintPositionListListener);
@@ -961,7 +997,7 @@ public abstract class BrowserMapView implements MapView {
 
     private boolean isFixMap(Double longitude, Double latitude) {
         FixMapMode fixMapMode = fixMapModeModel.getFixMapMode();
-        return fixMapMode.equals(Yes) || fixMapMode.equals(Automatic) && isGoogleMap() && isPositionInChina(longitude, latitude);
+        return fixMapMode.equals(Yes) || fixMapMode.equals(Automatic) && isGoogleFixMap() && isPositionInChina(longitude, latitude);
     }
 
     private NavigationPosition parsePosition(String latitudeString, String longitudeString) {
@@ -1029,8 +1065,18 @@ public abstract class BrowserMapView implements MapView {
         executeScript("removeOverlays();\nremoveDirections();");
     }
 
+    String asColor(Color color) {
+        return encodeByte((byte) color.getRed()) + encodeByte((byte) color.getGreen()) + encodeByte((byte) color.getBlue());
+    }
+
+    private static final float MINIMUM_OPACITY = 0.3f;
+
+    float asOpacity(Color color) {
+        return MINIMUM_OPACITY + color.getAlpha() / 256f * (1 - MINIMUM_OPACITY);
+    }
+
     private void addDirectionsToMap(List<NavigationPosition> positions) {
-        executeScript("resetDirections();");
+        resetDirections();
 
         // avoid throwing javascript exceptions if there is nothing to direct
         if (positions.size() < 2) {
@@ -1038,9 +1084,12 @@ public abstract class BrowserMapView implements MapView {
             return;
         }
 
+        generationId++;
+        directionsPositions.addAll(positions);
         executeScript("removeOverlays();");
 
-        String color = encodeColor(mapViewCallback.getRouteColor());
+        String color = asColor(routeColorModel.getColor());
+        float opacity = asOpacity(routeColorModel.getColor());
         int width = preferences.getInt(ROUTE_LINE_WIDTH_PREFERENCE, 5);
         int maximumRouteSegmentLength = positionReducer.getMaximumSegmentLength(Route);
         int directionsCount = ceiling(positions.size(), maximumRouteSegmentLength, false);
@@ -1065,16 +1114,24 @@ public abstract class BrowserMapView implements MapView {
             buffer.append("avoidHighways: ").append(mapViewCallback.isAvoidHighways()).append(",");
             buffer.append("avoidTolls: ").append(mapViewCallback.isAvoidTolls()).append(",");
             buffer.append("region: \"").append(Locale.getDefault().getCountry().toLowerCase()).append("\"},");
+            buffer.append(generationId).append(",");
+            buffer.append(start).append(",");
             int startIndex = positionsModel.getIndex(origin);
             buffer.append(startIndex).append(",");
             boolean lastSegment = (j == directionsCount - 1);
-            buffer.append(lastSegment).append(",\"#").append(color).append("\",").append(width).append(");\n");
+            buffer.append(lastSegment).append(",\"#").append(color).append("\",").append(opacity).append(",").append(width).append(");\n");
             try {
                 sleep(preferences.getInt("routeSegmentTimeout", 250));
             } catch (InterruptedException e) {
                 // intentionally left empty
             }
             executeScript(buffer.toString());
+        }
+
+        try {
+            sleep(preferences.getInt("routeCompleteTimeout", 1000));
+        } catch (InterruptedException e) {
+            // intentionally left empty
         }
     }
 
@@ -1085,7 +1142,8 @@ public abstract class BrowserMapView implements MapView {
             return;
         }
 
-        String color = encodeColor(mapViewCallback.getTrackColor());
+        String color = asColor(trackColorModel.getColor());
+        float opacity = asOpacity(trackColorModel.getColor());
         int width = preferences.getInt(TRACK_LINE_WIDTH_PREFERENCE, 2);
         int maximumPolylineSegmentLength = positionReducer.getMaximumSegmentLength(Track);
         int polylinesCount = ceiling(reducedPositions.size(), maximumPolylineSegmentLength, true);
@@ -1099,7 +1157,7 @@ public abstract class BrowserMapView implements MapView {
                 if (i < maximum - 1)
                     latlngs.append(",");
             }
-            executeScript("addPolyline([" + latlngs + "],\"#" + color + "\"," + width + ");");
+            executeScript("addPolyline([" + latlngs + "],\"#" + color + "\"," + opacity + "," + width + ");");
         }
 
         addWaypointIconsToMap(allPositions);
@@ -1199,7 +1257,7 @@ public abstract class BrowserMapView implements MapView {
     }
 
     private final Map<Integer, PositionPair> insertWaypointsQueue = new LinkedHashMap<>();
-    private final ExecutorService insertWaypointsExecutor = newSingleThreadExecutor();
+    private final ExecutorService insertWaypointsExecutor = createSingleThreadExecutor("InsertWaypoints");
 
     private void insertWaypoints(final String mode, int[] startPositions) {
         final Map<Integer, PositionPair> addToQueue = new LinkedHashMap<>();
@@ -1238,6 +1296,35 @@ public abstract class BrowserMapView implements MapView {
                         // intentionally left empty
                     }
                 }
+            }
+        });
+    }
+
+    private void insertWaypointsCallback(Integer key, List<String> parameters) {
+        PositionPair pair;
+        synchronized (insertWaypointsQueue) {
+            pair = insertWaypointsQueue.remove(key);
+        }
+
+        if (parameters.size() < 5 || pair == null)
+            return;
+
+        final NavigationPosition before = pair.getFirst();
+        NavigationPosition after = pair.getSecond();
+        final BaseRoute route = parseRoute(parameters, before, after);
+        @SuppressWarnings("unchecked")
+        final List<NavigationPosition> positions = positionsModel.getRoute().getPositions();
+        synchronized (notificationMutex) {
+            int row = positions.indexOf(before) + 1;
+            insertPositions(row, route);
+        }
+        invokeLater(new Runnable() {
+            public void run() {
+                int row;
+                synchronized (notificationMutex) {
+                    row = positions.indexOf(before) + 1;
+                }
+                complementPositions(row, route);
             }
         });
     }
@@ -1283,31 +1370,30 @@ public abstract class BrowserMapView implements MapView {
     private void processStream(Socket socket) throws IOException {
         List<String> lines = new ArrayList<>();
         boolean processingPost = false, processingBody = false;
-        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()), 64 * 1024);
-        while (true) {
-            try {
-                String line = trim(reader.readLine());
-                if (line == null) {
-                    if (processingPost && !processingBody) {
-                        processingBody = true;
-                        continue;
-                    } else
-                        break;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()), 64 * 1024)) {
+            while (true) {
+                try {
+                    String line = trim(reader.readLine());
+                    if (line == null) {
+                        if (processingPost && !processingBody) {
+                            processingBody = true;
+                            continue;
+                        } else
+                            break;
+                    }
+                    if (line.startsWith("POST"))
+                        processingPost = true;
+                    lines.add(line);
+                } catch (IOException e) {
+                    log.severe("Cannot read line from callback listener port:" + e);
+                    break;
                 }
-                if (line.startsWith("POST"))
-                    processingPost = true;
-                lines.add(line);
-            } catch (IOException e) {
-                log.severe("Cannot read line from callback listener port:" + e);
-                break;
             }
-        }
 
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
-            writer.write("HTTP/1.1 200 OK\n");
-            writer.write("Content-Type: text/plain\n");
-        } finally {
-            reader.close();
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))) {
+                writer.write("HTTP/1.1 200 OK\n");
+                writer.write("Content-Type: text/plain\n");
+            }
         }
 
         StringBuilder buffer = new StringBuilder();
@@ -1375,7 +1461,6 @@ public abstract class BrowserMapView implements MapView {
         }
     }
 
-    private static final Pattern DIRECTIONS_LOAD_PATTERN = Pattern.compile("^directions-load/(\\d*)/(\\d*)$");
     private static final Pattern ADD_POSITION_PATTERN = Pattern.compile("^add-position/(.*)/(.*)$");
     private static final Pattern ADD_POSITION_AT_PATTERN = Pattern.compile("^add-position-at/(.*)/(.*)/(.*)$");
     private static final Pattern MOVE_POSITION_PATTERN = Pattern.compile("^move-position/(.*)/(.*)/(.*)$");
@@ -1389,16 +1474,9 @@ public abstract class BrowserMapView implements MapView {
     private static final Pattern OVER_QUERY_LIMIT_PATTERN = Pattern.compile("^over-query-limit$");
     private static final Pattern ZERO_RESULTS_PATTERN = Pattern.compile("^zero-results$");
     private static final Pattern INSERT_WAYPOINTS_PATTERN = Pattern.compile("^(Insert-All-Waypoints|Insert-Only-Turnpoints): (-?\\d+)/(.*)$");
+    private static final Pattern DIRECTIONS_LOAD_PATTERN = Pattern.compile("^directions-load/(\\d+)/(\\d+)/(.*)$");
 
     boolean processCallback(String callback) {
-        Matcher directionsLoadMatcher = DIRECTIONS_LOAD_PATTERN.matcher(callback);
-        if (directionsLoadMatcher.matches()) {
-            int meters = parseInt(directionsLoadMatcher.group(1));
-            int seconds = parseInt(directionsLoadMatcher.group(2));
-            fireCalculatedDistance(meters, seconds);
-            return true;
-        }
-
         Matcher insertPositionAtMatcher = ADD_POSITION_AT_PATTERN.matcher(callback);
         if (insertPositionAtMatcher.matches()) {
             final int row = parseInt(insertPositionAtMatcher.group(1)) + 1;
@@ -1519,39 +1597,25 @@ public abstract class BrowserMapView implements MapView {
             return true;
         }
 
+        Matcher directionsLoadMatcher = DIRECTIONS_LOAD_PATTERN.matcher(callback);
+        if (directionsLoadMatcher.matches()) {
+            Integer generation = parseInt(directionsLoadMatcher.group(1));
+            if (generation != generationId) {
+                log.warning("Got directions load from generation id: " + generation + ", current: " + generationId);
+            } else {
+                Integer generationIndex = parseInt(directionsLoadMatcher.group(2));
+                List<DistanceAndTime> distanceAndTimes = parseDistanceAndTimeParameters(directionsLoadMatcher.group(3));
+                directionsLoadCallback(generationIndex, distanceAndTimes);
+            }
+            return true;
+        }
+
         Matcher insertWaypointsMatcher = INSERT_WAYPOINTS_PATTERN.matcher(callback);
         if (insertWaypointsMatcher.matches()) {
             Integer key = parseInteger(insertWaypointsMatcher.group(2));
-            List<String> parameters = parseParameters(insertWaypointsMatcher.group(3));
-
-            PositionPair pair;
-            synchronized (insertWaypointsQueue) {
-                pair = insertWaypointsQueue.remove(key);
-            }
-
-            if (parameters.size() < 5 || pair == null)
-                return true;
-
-            final NavigationPosition before = pair.getFirst();
-            NavigationPosition after = pair.getSecond();
-            final BaseRoute route = parseRoute(parameters, before, after);
-            @SuppressWarnings("unchecked")
-            final List<NavigationPosition> positions = positionsModel.getRoute().getPositions();
-            synchronized (notificationMutex) {
-                int row = positions.indexOf(before) + 1;
-                insertPositions(row, route);
-            }
-            invokeLater(new Runnable() {
-                public void run() {
-                    int row;
-                    synchronized (notificationMutex) {
-                        row = positions.indexOf(before) + 1;
-                    }
-                    complementPositions(row, route);
-                }
-            });
-            log.info("processed insert " + callback);
-            return false;
+            List<String> parameters = parsePositionParameters(insertWaypointsMatcher.group(3));
+            insertWaypointsCallback(key, parameters);
+            return true;
         }
         return false;
     }
@@ -1578,10 +1642,9 @@ public abstract class BrowserMapView implements MapView {
             // since setCenter() leads to a callback and thus paints the track twice
             if (ignoreNextZoomCallback)
                 ignoreNextZoomCallback = false;
-            else if (recenterAfterZooming.getBoolean() ||
-                    // directions are automatically scaled by the Google Maps API when zooming
-                    !positionsModel.getRoute().getCharacteristics().equals(Route) ||
-                    positionReducer.hasFilteredVisibleArea()) {
+            else if (// directions are automatically scaled by the Google Maps API when zooming
+                    !positionsModel.getRoute().getCharacteristics().equals(Route) &&
+                            (recenterAfterZooming.getBoolean() || positionReducer.hasFilteredVisibleArea())) {
                 haveToRepaintRouteImmediately = true;
                 // if enabled, recenter map to selected positions after zooming
                 if (recenterAfterZooming.getBoolean())
@@ -1609,7 +1672,7 @@ public abstract class BrowserMapView implements MapView {
         if (position == null)
             return false;
         Double distance = position.calculateDistance(insert);
-        return distance != null && distance < 10.0;
+        return toDouble(distance) < 10.0;
     }
 
     private String trimSpaces(String string) {
@@ -1622,7 +1685,7 @@ public abstract class BrowserMapView implements MapView {
         }
     }
 
-    private List<String> parseParameters(String parameters) {
+    private List<String> parsePositionParameters(String parameters) {
         List<String> result = new ArrayList<>();
         StringTokenizer tokenizer = new StringTokenizer(parameters, "/");
         while (tokenizer.hasMoreTokens()) {
@@ -1648,6 +1711,19 @@ public abstract class BrowserMapView implements MapView {
         return result;
     }
 
+    private List<DistanceAndTime> parseDistanceAndTimeParameters(String parameters) {
+        List<DistanceAndTime> result = new ArrayList<>();
+        StringTokenizer tokenizer = new StringTokenizer(parameters, "/");
+        while (tokenizer.hasMoreTokens()) {
+            String distance = trim(tokenizer.nextToken());
+            if (tokenizer.hasMoreTokens()) {
+                String time = trim(tokenizer.nextToken());
+                result.add(new DistanceAndTime(parseDouble(distance), parseLong(time)));
+            }
+        }
+        return result;
+    }
+
     private Double parseSeconds(String string) {
         Double result = parseDouble(string);
         return !isEmpty(result) ? result : null;
@@ -1668,9 +1744,7 @@ public abstract class BrowserMapView implements MapView {
                 calendar.add(SECOND, -seconds.intValue());
                 time = fromCalendar(calendar);
             }
-            String description = instructions != null ? instructions : null;
-
-            BaseNavigationPosition position = route.createPosition(coordinates.getLongitude(), coordinates.getLatitude(), null, null, seconds != null ? time : null, description);
+            BaseNavigationPosition position = route.createPosition(coordinates.getLongitude(), coordinates.getLatitude(), null, null, seconds != null ? time : null, instructions);
             if (!isDuplicate(before, position) && !isDuplicate(after, position)) {
                 route.add(0, position);
             }
@@ -1801,6 +1875,47 @@ public abstract class BrowserMapView implements MapView {
         }
     }
 
+    private int generationId;
+    private List<NavigationPosition> directionsPositions = new ArrayList<>();
+    private Map<Integer, DistanceAndTime> indexToDistanceAndTime = new HashMap<>();
+
+    private void resetDirections() {
+        directionsPositions.clear();
+        indexToDistanceAndTime.clear();
+    }
+
+    private void directionsLoadCallback(final int generationIndex, final List<DistanceAndTime> distanceAndTimes) {
+        executor.execute(new Runnable() {
+            public void run() {
+                for (int i = 0; i < distanceAndTimes.size(); i++) {
+                    // find successor of start position from directions for first DistanceAndTime
+                    NavigationPosition position = directionsPositions.get(generationIndex + i + 1);
+                    int index = positionsModel.getIndex(position);
+                    indexToDistanceAndTime.put(index, distanceAndTimes.get(i));
+                }
+
+                Map<Integer, DistanceAndTime> result = new HashMap<>(indexToDistanceAndTime.size());
+                double aggregatedDistance = 0.0;
+                long aggregatedTime = 0L;
+                List<Integer> indices = new ArrayList<>(indexToDistanceAndTime.keySet());
+                sort(indices);
+                for(Integer index : indices) {
+                    DistanceAndTime distanceAndTime = indexToDistanceAndTime.get(index);
+                    if(distanceAndTime != null) {
+                        Double distance = distanceAndTime.getDistance();
+                        if (!isEmpty(distance))
+                            aggregatedDistance += distance;
+                        Long time = distanceAndTime.getTime();
+                        if (!isEmpty(time))
+                            aggregatedTime += time;
+                    }
+                    result.put(index, new DistanceAndTime(aggregatedDistance, aggregatedTime));
+                }
+                fireCalculatedDistances(result);
+            }
+        });
+    }
+
     // listeners
 
     private final List<MapViewListener> mapViewListeners = new CopyOnWriteArrayList<>();
@@ -1813,9 +1928,9 @@ public abstract class BrowserMapView implements MapView {
         mapViewListeners.remove(listener);
     }
 
-    private void fireCalculatedDistance(int meters, int seconds) {
+    private void fireCalculatedDistances(Map<Integer, DistanceAndTime> indexToDistanceAndTime) {
         for (MapViewListener listener : mapViewListeners) {
-            listener.calculatedDistance(meters, seconds);
+            listener.calculatedDistances(indexToDistanceAndTime);
         }
     }
 

@@ -54,7 +54,7 @@ import static slash.navigation.gui.helpers.UIHelper.setUseSystemProxies;
 
 public abstract class Application {
     private static final Logger log = getLogger(SingleFrameApplication.class.getName());
-    private static Application application = null;
+    private static Application application;
     private final List<ExitListener> exitListeners;
     private final ApplicationContext context;
     private Preferences preferences = userNodeForPackage(getClass());
@@ -131,6 +131,13 @@ public abstract class Application {
             extender.addJarInJar(swtJar);
         } catch (Exception e) {
             log.info("Cannot extend classpath with SWT from " + swtJar + ": " + e);
+        }
+
+        String gpsbabelJar = "gpsbabel-" + getOperationSystem() + ".jar";
+        try {
+            extender.addJarInJar(gpsbabelJar);
+        } catch (Exception e) {
+            log.info("Cannot extend classpath with GPSBabel from " + gpsbabelJar + ": " + e);
         }
 
         File javaFxJar = new File(System.getProperty("java.home"), "lib/jfxrt.jar");

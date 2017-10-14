@@ -24,12 +24,14 @@ import slash.common.type.CompactCalendar;
 import slash.navigation.base.RouteCharacteristics;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.models.CharacteristicsModel;
+import slash.navigation.common.DistanceAndTime;
 import slash.navigation.converter.gui.models.PositionsModel;
 
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
@@ -39,6 +41,7 @@ import static javax.swing.event.ListDataEvent.CONTENTS_CHANGED;
 import static javax.swing.event.TableModelEvent.ALL_COLUMNS;
 import static javax.swing.event.TableModelEvent.UPDATE;
 import static slash.common.helpers.ThreadHelper.safeJoin;
+import static slash.common.io.Transfer.isEmpty;
 import static slash.navigation.base.RouteCharacteristics.Route;
 import static slash.navigation.base.RouteCharacteristics.Waypoints;
 import static slash.navigation.converter.gui.models.CharacteristicsModel.IGNORE;
@@ -58,7 +61,7 @@ public class LengthCalculator {
     private PositionsModel positionsModel;
     private Thread lengthCalculator;
     private final Object notificationMutex = new Object();
-    private boolean running = true, recalculate = false;
+    private boolean running = true, recalculate;
 
     public LengthCalculator() {
         initialize();
@@ -107,11 +110,30 @@ public class LengthCalculator {
         lengthCalculatorListeners.add(listener);
     }
 
-    public void fireCalculatedDistance(double meters, long seconds) {
+    private void fireCalculatedDistance(double meters, long seconds) {
         for (LengthCalculatorListener listener : lengthCalculatorListeners) {
             listener.calculatedDistance(meters, seconds);
         }
     }
+
+    public void calculateDistanceFromRouting(Map<Integer, DistanceAndTime> indexToDistanceAndTime) {
+        double meters = 0;
+        long seconds = 0;
+        for (DistanceAndTime distanceAndTime : indexToDistanceAndTime.values()) {
+            if(distanceAndTime == null)
+                continue;
+
+            Double distance = distanceAndTime.getDistance();
+            if (!isEmpty(distance) && distance > meters)
+                meters = distance;
+
+            Long time = distanceAndTime.getTime();
+            if (!isEmpty(time) && time > seconds)
+                seconds = time;
+        }
+        fireCalculatedDistance(meters, seconds);
+    }
+
 
     private void calculateDistance() {
         if (getCharacteristics().equals(Waypoints)) {
@@ -138,7 +160,7 @@ public class LengthCalculator {
             NavigationPosition next = positionsModel.getPosition(i);
             if (previous != null) {
                 Double distance = previous.calculateDistance(next);
-                if (distance != null)
+                if (!isEmpty(distance))
                     distanceMeters += distance;
                 Long time = previous.calculateTime(next);
                 if (time != null && time > 0)

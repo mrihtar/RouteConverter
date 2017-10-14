@@ -17,7 +17,6 @@
 
     Copyright (C) 2007 Christian Pesch. All Rights Reserved.
 */
-
 package slash.navigation.gui.jarinjar;
 
 import java.io.File;
@@ -36,7 +35,11 @@ import static slash.navigation.gui.jarinjar.JarInJarURLStreamHandler.JAR_IN_JAR_
  *         and http://stackoverflow.com/questions/1010919/adding-files-to-java-classpath-at-runtime
  */
 public class ClassPathExtender {
-    private final URLClassLoader classLoader = URLClassLoader.class.cast(ClassPathExtender.class.getClassLoader());
+    private final ClassLoader classLoader = ClassLoader.class.cast(ClassPathExtender.class.getClassLoader());
+
+    public ClassPathExtender() {
+        URL.setURLStreamHandlerFactory(new JarInJarURLStreamHandlerFactory(classLoader));
+    }
 
     public ClassLoader getClassLoader() {
         return classLoader;
@@ -49,7 +52,6 @@ public class ClassPathExtender {
     }
 
     public void addJarInJar(String fileName) throws MalformedURLException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        URL.setURLStreamHandlerFactory(new JarInJarURLStreamHandlerFactory(classLoader));
         addURL(new URL(JAR_IN_JAR_PROTOCOL + fileName));
     }
 

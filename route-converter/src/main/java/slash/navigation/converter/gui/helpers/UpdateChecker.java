@@ -98,7 +98,7 @@ public class UpdateChecker {
         int confirm = showConfirmDialog(window,
                 format(RouteConverter.getBundle().getString("confirm-routeconverter-update"),
                         result.getMyRouteConverterVersion(),
-                        RouteConverter.getInstance().getEditionName(),
+                        RouteConverter.getInstance().getEdition(),
                         result.getLatestRouteConverterVersion()),
                 RouteConverter.getTitle(), YES_NO_OPTION);
         if (confirm == YES_OPTION)
@@ -107,7 +107,7 @@ public class UpdateChecker {
 
     private void noUpdateAvailable(Window window) {
         showMessageDialog(window, format(RouteConverter.getBundle().getString("no-update-available"),
-                RouteConverter.getInstance().getEditionName()),
+                RouteConverter.getInstance().getEdition()),
                 RouteConverter.getTitle(), INFORMATION_MESSAGE);
     }
 
@@ -180,10 +180,8 @@ public class UpdateChecker {
 
         public boolean existsLaterRouteConverterVersion() {
             String latestRouteConverterVersion = getLatestRouteConverterVersion();
-            if (latestRouteConverterVersion == null)
-                return false;
-            boolean isLatestRouteConverterVersion = new Version(getMyRouteConverterVersion()).isLaterVersionThan(new Version(latestRouteConverterVersion));
-            return !isLatestRouteConverterVersion;
+            return latestRouteConverterVersion != null &&
+                    new Version(latestRouteConverterVersion).isLaterVersionThan(new Version(getMyRouteConverterVersion()));
         }
 
         public String getMyJavaVersion() {
@@ -200,7 +198,8 @@ public class UpdateChecker {
 
         public boolean existsLaterJavaVersion() {
             String latestJavaVersion = getLatestJavaVersion();
-            return latestJavaVersion != null && myJavaVersion.compareTo(latestJavaVersion) < 0;
+            return latestJavaVersion != null &&
+                    new Version(latestJavaVersion).isLaterVersionThan(new Version(getMyJavaVersion()));
         }
 
         String getValue(String key) {

@@ -22,10 +22,8 @@ package slash.navigation.mapview.mapsforge.models;
 
 import slash.navigation.gui.actions.ActionManager;
 
-import javax.swing.*;
-
 /**
- * Contains constants for the map related {@link ActionManager#registerLocal(String, String, Action) local names}
+ * Contains constants for the map related {@link ActionManager#registerLocal(String, String, String) local names}
  * of the {@link ActionManager}.
  *
  * @author Christian Pesch

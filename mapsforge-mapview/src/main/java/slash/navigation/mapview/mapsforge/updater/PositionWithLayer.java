@@ -28,7 +28,7 @@ import slash.navigation.common.NavigationPosition;
  * @author Christian Pesch
  */
 
-public class PositionWithLayer {
+public class PositionWithLayer implements ObjectWithLayer {
     private final NavigationPosition position;
     private Layer layer;
 
@@ -67,4 +67,7 @@ public class PositionWithLayer {
         result = 31 * result + (layer != null ? layer.hashCode() : 0);
         return result;
     }
-}
+
+    public String toString() {
+        return getClass().getSimpleName() + "@" + hashCode() + "[position=" + getPosition() + ", layer=" + getLayer() + "]";
+    }}

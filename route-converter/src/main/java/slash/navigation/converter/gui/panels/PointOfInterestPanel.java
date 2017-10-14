@@ -23,6 +23,7 @@ import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.intellij.uiDesigner.core.Spacer;
 import slash.navigation.base.Wgs84Position;
+import slash.navigation.common.SimpleNavigationPosition;
 import slash.navigation.converter.gui.RouteConverter;
 import slash.navigation.converter.gui.actions.AddAudioAction;
 import slash.navigation.converter.gui.actions.DeletePositionAction;
@@ -35,6 +36,7 @@ import slash.navigation.converter.gui.models.PositionColumnValues;
 import slash.navigation.converter.gui.models.PositionTableColumn;
 import slash.navigation.converter.gui.models.PositionsModel;
 import slash.navigation.converter.gui.predicates.PointOfInterestPositionPredicate;
+import slash.navigation.converter.gui.renderer.DescriptionColumnTableCellEditor;
 import slash.navigation.gui.actions.ActionManager;
 import slash.navigation.gui.actions.FrameAction;
 
@@ -56,10 +58,11 @@ import static javax.swing.DropMode.ON;
 import static javax.swing.JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT;
 import static javax.swing.KeyStroke.getKeyStroke;
 import static javax.swing.event.TableModelEvent.ALL_COLUMNS;
-import static slash.navigation.converter.gui.models.LocalNames.POINTS_OF_INTEREST;
+import static slash.navigation.converter.gui.models.LocalActionConstants.POINTS_OF_INTEREST;
 import static slash.navigation.converter.gui.models.PositionColumns.DESCRIPTION_COLUMN_INDEX;
 import static slash.navigation.converter.gui.models.PositionColumns.PHOTO_COLUMN_INDEX;
 import static slash.navigation.gui.helpers.JMenuHelper.registerAction;
+import static slash.navigation.gui.helpers.JTableHelper.calculateRowHeight;
 import static slash.navigation.gui.helpers.JTableHelper.isFirstToLastRow;
 
 /**
@@ -70,7 +73,6 @@ import static slash.navigation.gui.helpers.JTableHelper.isFirstToLastRow;
 
 public class PointOfInterestPanel implements PanelInTab {
     private static final int ROW_HEIGHT_FOR_PHOTO_COLUMN = 200;
-    private int defaultTableRowHeight;
 
     private JPanel pointsOfInterestPanel;
     private JTable tablePointsOfInterest;
@@ -123,7 +125,6 @@ public class PointOfInterestPanel implements PanelInTab {
             }
         });
 
-        defaultTableRowHeight = tablePointsOfInterest.getRowHeight();
         tableColumnModel.addChangeListener(new ChangeListener() {
             public void stateChanged(ChangeEvent e) {
                 handleColumnVisibilityUpdate((PositionTableColumn) e.getSource());
@@ -155,6 +156,10 @@ public class PointOfInterestPanel implements PanelInTab {
         handlePositionsUpdate();
         for (PositionTableColumn column : tableColumnModel.getPreparedColumns())
             handleColumnVisibilityUpdate(column);
+    }
+
+    private int getDefaultRowHeight() {
+        return calculateRowHeight(this, new DescriptionColumnTableCellEditor(), new SimpleNavigationPosition(null, null));
     }
 
     public Component getRootComponent() {
@@ -197,7 +202,7 @@ public class PointOfInterestPanel implements PanelInTab {
 
     private void handleColumnVisibilityUpdate(PositionTableColumn column) {
         if (column.getModelIndex() == PHOTO_COLUMN_INDEX)
-            tablePointsOfInterest.setRowHeight(column.isVisible() ? ROW_HEIGHT_FOR_PHOTO_COLUMN : defaultTableRowHeight);
+            tablePointsOfInterest.setRowHeight(column.isVisible() ? ROW_HEIGHT_FOR_PHOTO_COLUMN : getDefaultRowHeight());
     }
 
     public void addAudio(Wgs84Position position, File file) {

@@ -6,7 +6,7 @@
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>route-converter-build</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../route-converter-build/pom.xml</relativePath>
     </parent>
 
@@ -41,6 +41,13 @@
                                     <overWrite>false</overWrite>
                                     <destFileName>swt-windows-64.jar</destFileName>
                                 </artifactItem>
+                                <artifactItem>
+                                    <groupId>gpsbabel.gpsbabel</groupId>
+                                    <artifactId>win32.win32.x86</artifactId>
+                                    <version>1.4.4</version>
+                                    <overWrite>false</overWrite>
+                                    <destFileName>gpsbabel-windows.jar</destFileName>
+                                </artifactItem>
                             </artifactItems>
                         </configuration>
                     </execution>
@@ -69,7 +76,7 @@
                                         <Main-Class>slash.navigation.converter.gui.RouteConverter</Main-Class>
                                         <SplashScreen-Image>slash/navigation/converter/gui/RouteConverter.png</SplashScreen-Image>
                                         <Permissions>all-permissions</Permissions>
-                                        <Codebase>www.routeconverter.com www.routeconverter.de</Codebase>
+                                        <Codebase>www.routeconverter.com</Codebase>
                                         <Application-Name>RouteConverter</Application-Name>
                                     </manifestEntries>
                                 </transformer>
@@ -78,10 +85,15 @@
                                 <filter>
                                     <artifact>*:*</artifact>
                                     <excludes>
+                                        <exclude>META-INF/*.inf</exclude>
                                         <exclude>META-INF/*.txt</exclude>
                                         <exclude>META-INF/LICENSE*</exclude>
                                         <exclude>META-INF/NOTICE*</exclude>
+                                        <exclude>META-INF/jb/</exclude>
                                         <exclude>META-INF/maven/</exclude>
+                                        <exclude>META-INF/services/</exclude>
+                                        <exclude>mozilla/*</exclude>
+                                        <exclude>*.html</exclude>
                                         <exclude>external.xpt</exclude>
                                         <exclude>version.txt</exclude>
                                     </excludes>
@@ -197,11 +209,6 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>swt-mapview</artifactId>
             <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>gpsbabel.gpsbabel</groupId>
-            <artifactId>win32.win32.x86</artifactId>
-            <version>1.4.4</version>
         </dependency>
     </dependencies>
 </project>

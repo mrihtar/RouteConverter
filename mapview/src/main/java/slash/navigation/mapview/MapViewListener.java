@@ -20,6 +20,10 @@
 
 package slash.navigation.mapview;
 
+import slash.navigation.common.DistanceAndTime;
+
+import java.util.Map;
+
 /**
  * Interface for events from a {@link MapView}
  *
@@ -27,6 +31,6 @@ package slash.navigation.mapview;
  */
 
 public interface MapViewListener {
-    void calculatedDistance(double meters, long seconds);
+    void calculatedDistances(Map<Integer, DistanceAndTime> indexToDistanceAndTime);
     void receivedCallback(int port);
 }

@@ -23,6 +23,7 @@ import org.junit.Test;
 import slash.navigation.rest.SimpleCredentials;
 import slash.navigation.rest.exception.DuplicateNameException;
 import slash.navigation.rest.exception.ForbiddenException;
+import slash.navigation.rest.exception.UnAuthorizedException;
 import slash.navigation.routes.Category;
 import slash.navigation.routes.NotFoundException;
 import slash.navigation.routes.NotOwnerException;
@@ -85,7 +86,7 @@ public class RemoteRouteIT extends BaseRemoteCatalogTest {
         createAndDeleteRoute("/Slashes/Route/" + currentTimeMillis() + "/");
     }
 
-    @Test(expected = ForbiddenException.class)
+    @Test(expected = UnAuthorizedException.class)
     public void testCreateRouteForbidden() throws IOException {
         RemoteCatalog wrong = new RemoteCatalog(API, new SimpleCredentials(USERNAME, "wrong-password"));
         wrong.addRoute(API, "egal", null, REMOTE_URL);
@@ -134,9 +135,7 @@ public class RemoteRouteIT extends BaseRemoteCatalogTest {
         superUser.deleteRoute(url);
 
         for (Route route : catalog.getRootCategory().getRoutes()) {
-            if (route.getHref().equals(url)) {
-                assertTrue("Route " + description + " still exists", false);
-            }
+            assertEquals("Route " + description + " still exists", route.getHref(), url);
         }
     }
 
@@ -190,8 +189,13 @@ public class RemoteRouteIT extends BaseRemoteCatalogTest {
     }
 
     @Test(expected = NotFoundException.class)
-    public void testCannotUpdateNotExistingRoute() throws IOException {
+    public void testCannotUpdateNotExistingRouteUrl() throws IOException {
         catalog.updateRoute(API + ROUTE_URI + currentTimeMillis() + "/", API, "egal", null, REMOTE_URL);
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void testCannotUpdateNotExistingRouteFile() throws IOException {
+        catalog.updateRoute(API + ROUTE_URI + currentTimeMillis() + "/", API, "egal", REMOTE_URL, null);
     }
 
     @Test(expected = DuplicateNameException.class)

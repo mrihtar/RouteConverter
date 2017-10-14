@@ -26,8 +26,7 @@ import slash.navigation.bcr.BcrRoute;
 import slash.navigation.bcr.MTP0607Format;
 import slash.navigation.bcr.MTP0809Format;
 import slash.navigation.columbus.ColumbusGpsBinaryFormat;
-import slash.navigation.columbus.ColumbusGpsProfessionalFormat;
-import slash.navigation.columbus.ColumbusGpsStandardFormat;
+import slash.navigation.columbus.ColumbusGpsType1Format;
 import slash.navigation.columbus.ColumbusGpsType2Format;
 import slash.navigation.common.BoundingBox;
 import slash.navigation.common.NavigationPosition;
@@ -48,9 +47,9 @@ import slash.navigation.gpx.Gpx10Format;
 import slash.navigation.gpx.Gpx11Format;
 import slash.navigation.gpx.GpxFormat;
 import slash.navigation.gpx.GpxRoute;
-import slash.navigation.photo.PhotoFormat;
 import slash.navigation.itn.TomTom5RouteFormat;
 import slash.navigation.itn.TomTom8RouteFormat;
+import slash.navigation.itn.TomTom95RouteFormat;
 import slash.navigation.itn.TomTomRoute;
 import slash.navigation.itn.TomTomRouteFormat;
 import slash.navigation.klicktel.KlickTelRoute;
@@ -79,6 +78,8 @@ import slash.navigation.nmea.MagellanRouteFormat;
 import slash.navigation.nmea.NmeaFormat;
 import slash.navigation.nmea.NmeaRoute;
 import slash.navigation.nmn.NavigatingPoiWarnerFormat;
+import slash.navigation.nmn.NavigonCruiserFormat;
+import slash.navigation.nmn.NavigonCruiserRoute;
 import slash.navigation.nmn.Nmn4Format;
 import slash.navigation.nmn.Nmn5Format;
 import slash.navigation.nmn.Nmn6FavoritesFormat;
@@ -90,6 +91,7 @@ import slash.navigation.nmn.NmnRouteFormat;
 import slash.navigation.nmn.NmnUrlFormat;
 import slash.navigation.ovl.OvlFormat;
 import slash.navigation.ovl.OvlRoute;
+import slash.navigation.photo.PhotoFormat;
 import slash.navigation.simple.ApeMapFormat;
 import slash.navigation.simple.GlopusFormat;
 import slash.navigation.simple.GoRiderGpsFormat;
@@ -134,7 +136,9 @@ import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.binarySearch;
+import static slash.common.io.Transfer.isEmpty;
 import static slash.common.io.Transfer.toArray;
+import static slash.common.io.Transfer.toDouble;
 import static slash.common.type.CompactCalendar.UTC;
 import static slash.common.type.CompactCalendar.fromCalendar;
 import static slash.common.type.CompactCalendar.fromMillisAndTimeZone;
@@ -227,7 +231,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
         int index = 0;
         while (index < positions.size()) {
             P next = positions.get(index);
-            if (previous != null && (!next.hasCoordinates() || next.calculateDistance(previous) <= 0.0)) {
+            if (previous != null && (!next.hasCoordinates() || toDouble(next.calculateDistance(previous)) <= 0.0)) {
                 positions.remove(index);
             } else
                 index++;
@@ -254,7 +258,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
             CompactCalendar time = next.getTime();
             if (time == null || time.equals(previous.getTime())) {
                 Double distance = next.calculateDistance(previous);
-                Long millis = distance != null ? (long) (distance / averageSpeed * 1000) : null;
+                Long millis = !isEmpty(distance) ? (long) (distance / averageSpeed * 1000) : null;
                 if (millis == null || millis < 1000)
                     millis = 1000L;
                 next.setTime(fromMillisAndTimeZone(previous.getTime().getTimeInMillis() + millis, previous.getTime().getTimeZoneId()));
@@ -282,7 +286,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
         P previous = positions.get(0);
         for (int i = 1; i < positions.size() - 1; i++) {
             P next = positions.get(i);
-            if (!next.hasCoordinates() || next.calculateDistance(previous) <= distance)
+            if (!next.hasCoordinates() || toDouble(next.calculateDistance(previous)) <= distance)
                 result.add(i);
             else
                 previous = next;
@@ -392,7 +396,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
             NavigationPosition next = positions.get(i);
             if (previous != null) {
                 Double distance = previous.calculateDistance(next);
-                if (distance != null)
+                if (!isEmpty(distance))
                     result += distance;
             }
             previous = next;
@@ -410,7 +414,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
             NavigationPosition next = positions.get(index);
             if (previous != null) {
                 Double delta = previous.calculateDistance(next);
-                if (delta != null)
+                if (!isEmpty(delta))
                     distance += delta;
                 if (index >= startIndex)
                     result[index - startIndex] = distance;
@@ -435,7 +439,7 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
                 NavigationPosition next = positions.get(index);
                 if (previous != null) {
                     Double delta = previous.calculateDistance(next);
-                    if (delta != null)
+                    if (!isEmpty(delta))
                         distance += delta;
                     int indexInIndices = binarySearch(indices, index);
                     if (indexInIndices >= 0)
@@ -609,17 +613,10 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
     }
 
     @SuppressWarnings("UnusedDeclaration")
-    public SimpleRoute asColumbusGpsStandardFormat() {
-        if (getFormat() instanceof ColumbusGpsStandardFormat)
+    public SimpleRoute asColumbusGpsType1Format() {
+        if (getFormat() instanceof ColumbusGpsType1Format)
             return (SimpleRoute) this;
-        return asSimpleFormat(new ColumbusGpsStandardFormat());
-    }
-
-    @SuppressWarnings("UnusedDeclaration")
-    public SimpleRoute asColumbusGpsProfessionalFormat() {
-        if (getFormat() instanceof ColumbusGpsProfessionalFormat)
-            return (SimpleRoute) this;
-        return asSimpleFormat(new ColumbusGpsProfessionalFormat());
+        return asSimpleFormat(new ColumbusGpsType1Format());
     }
 
     @SuppressWarnings("UnusedDeclaration")
@@ -923,6 +920,18 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
     }
 
     @SuppressWarnings("UnusedDeclaration")
+    public NavigonCruiserRoute asNavigonCruiserFormat() {
+        if (getFormat() instanceof NavigonCruiserFormat)
+            return (NavigonCruiserRoute) this;
+
+        List<Wgs84Position> wgs84Positions = new ArrayList<>();
+        for (P position : getPositions()) {
+            wgs84Positions.add(position.asWgs84Position());
+        }
+        return new NavigonCruiserRoute(getName(), wgs84Positions);
+    }
+
+    @SuppressWarnings("UnusedDeclaration")
     public SimpleRoute asNavigatingPoiWarnerFormat() {
         if (getFormat() instanceof NavigatingPoiWarnerFormat)
             return (SimpleRoute) this;
@@ -1067,6 +1076,13 @@ public abstract class BaseRoute<P extends BaseNavigationPosition, F extends Base
         if (getFormat() instanceof TomTom8RouteFormat)
             return (TomTomRoute) this;
         return asTomTomRouteFormat(new TomTom8RouteFormat());
+    }
+
+    @SuppressWarnings("UnusedDeclaration")
+    public TomTomRoute asTomTom95RouteFormat() {
+        if (getFormat() instanceof TomTom95RouteFormat)
+            return (TomTomRoute) this;
+        return asTomTomRouteFormat(new TomTom95RouteFormat());
     }
 
     @SuppressWarnings("UnusedDeclaration")

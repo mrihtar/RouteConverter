@@ -113,12 +113,14 @@ import static slash.navigation.converter.gui.helpers.RouteModelHelper.getSelecte
 import static slash.navigation.converter.gui.helpers.RouteModelHelper.selectCategory;
 import static slash.navigation.converter.gui.helpers.RouteModelHelper.selectCategoryTreePath;
 import static slash.navigation.converter.gui.helpers.RouteModelHelper.selectRoute;
-import static slash.navigation.converter.gui.models.LocalNames.CATEGORIES;
-import static slash.navigation.converter.gui.models.LocalNames.ROUTES;
+import static slash.navigation.converter.gui.models.LocalActionConstants.CATEGORIES;
+import static slash.navigation.converter.gui.models.LocalActionConstants.ROUTES;
 import static slash.navigation.gui.helpers.JMenuHelper.registerAction;
+import static slash.navigation.gui.helpers.JTableHelper.calculateRowHeight;
 import static slash.navigation.gui.helpers.JTableHelper.selectAndScrollToPosition;
 import static slash.navigation.gui.helpers.UIHelper.startWaitCursor;
 import static slash.navigation.gui.helpers.UIHelper.stopWaitCursor;
+import static slash.navigation.gui.helpers.WindowHelper.handleOutOfMemoryError;
 
 /**
  * The browse panel of the route converter user interface.
@@ -216,7 +218,6 @@ public class BrowsePanel implements PanelInTab {
         treeCategories.getSelectionModel().setSelectionMode(CONTIGUOUS_TREE_SELECTION);
 
         tableRoutes.setModel(catalogModel.getRoutesTableModel());
-        tableRoutes.setDefaultRenderer(Object.class, new RoutesTableCellRenderer());
         tableRoutes.registerKeyboardAction(new FrameAction() {
             public void run() {
                 actionManager.run("delete-route");
@@ -254,6 +255,7 @@ public class BrowsePanel implements PanelInTab {
             }
         });
         TableCellRenderer headerRenderer = new SimpleHeaderRenderer("description", "creator");
+        TableCellRenderer cellRenderer = new RoutesTableCellRenderer();
         TableColumnModel columns = tableRoutes.getColumnModel();
         for (int i = 0; i < columns.getColumnCount(); i++) {
             TableColumn column = columns.getColumn(i);
@@ -262,7 +264,10 @@ public class BrowsePanel implements PanelInTab {
                 column.setPreferredWidth(80);
                 column.setMaxWidth(100);
             }
+            column.setCellRenderer(cellRenderer);
         }
+        tableRoutes.setRowHeight(getDefaultRowHeight());
+
         browsePanel.setTransferHandler(new PanelDropHandler());
 
         new RoutesTablePopupMenu(tableRoutes).createPopupMenu();
@@ -291,6 +296,10 @@ public class BrowsePanel implements PanelInTab {
                 });
             }
         }, "CategoryTreeInitializer").start();
+    }
+
+    private int getDefaultRowHeight() {
+        return calculateRowHeight(this, new DefaultCellEditor(new JTextField()), "Value");
     }
 
     private String createRootFolder() {
@@ -419,7 +428,7 @@ public class BrowsePanel implements PanelInTab {
         } catch (BabelException e) {
             r.handleBabelError(e);
         } catch (OutOfMemoryError e) {
-            r.handleOutOfMemoryError();
+            handleOutOfMemoryError(e);
         } catch (FileNotFoundException e) {
             r.handleFileNotFound(path);
         } catch (Throwable t) {

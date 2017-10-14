@@ -31,6 +31,7 @@ import org.apache.commons.imaging.formats.tiff.TiffDirectory;
 import org.apache.commons.imaging.formats.tiff.TiffImageMetadata;
 import org.apache.commons.imaging.formats.tiff.TiffImageMetadata.Directory;
 import org.apache.commons.imaging.formats.tiff.taginfos.TagInfo;
+import org.apache.commons.imaging.formats.tiff.taginfos.TagInfoRational;
 import org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory;
 import org.apache.commons.imaging.formats.tiff.write.TiffOutputSet;
 import slash.common.type.CompactCalendar;
@@ -102,6 +103,7 @@ import static org.apache.commons.imaging.formats.tiff.constants.TiffDirectoryCon
 import static org.apache.commons.imaging.formats.tiff.constants.TiffTagConstants.TIFF_TAG_DATE_TIME;
 import static org.apache.commons.imaging.formats.tiff.constants.TiffTagConstants.TIFF_TAG_MAKE;
 import static org.apache.commons.imaging.formats.tiff.constants.TiffTagConstants.TIFF_TAG_MODEL;
+import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
 import static slash.common.io.Directories.getTemporaryDirectory;
 import static slash.common.io.InputOutput.copyAndClose;
 import static slash.common.io.Transfer.parseInteger;
@@ -280,18 +282,27 @@ public class PhotoFormat extends SimpleFormat<Wgs84Route> {
         return dateString != null ? parseDate(dateString, DATE_TIME_FORMAT) : startDate;
     }
 
+    private RationalNumber getFieldValue(TiffDirectory directory, TagInfoRational tagInfoRational) {
+        try {
+            return directory.getFieldValue(tagInfoRational);
+        } catch (ImageReadException e) {
+            log.fine("Could not parse " + tagInfoRational + ": " + getLocalizedMessage(e));
+            return null;
+        }
+    }
+
     private Double parseAltitude(TiffDirectory directory) throws ImageReadException {
-        RationalNumber altitudeNumber = (RationalNumber) directory.getFieldValue(GPS_TAG_GPS_ALTITUDE);
+        RationalNumber altitudeNumber = getFieldValue(directory, GPS_TAG_GPS_ALTITUDE);
         if (altitudeNumber == null)
             return null;
 
         double altitude = altitudeNumber.doubleValue();
-        Byte altitudeRef = (Byte) directory.getFieldValue(GPS_TAG_GPS_ALTITUDE_REF);
-        return altitudeRef != null && altitudeRef == 1 ? -altitude : altitude;
+        Byte altitudeRef = directory.getFieldValue(GPS_TAG_GPS_ALTITUDE_REF);
+        return altitudeRef == 1 ? -altitude : altitude;
     }
 
     private Double parseSpeed(TiffDirectory directory) throws ImageReadException {
-        RationalNumber speedNumber = (RationalNumber) directory.getFieldValue(GPS_TAG_GPS_SPEED);
+        RationalNumber speedNumber = getFieldValue(directory, GPS_TAG_GPS_SPEED);
         if (speedNumber == null)
             return null;
 
@@ -320,8 +331,8 @@ public class PhotoFormat extends SimpleFormat<Wgs84Route> {
         return date;
     }
 
-    private Double parseDirection(TiffDirectory directory) throws ImageReadException {
-        RationalNumber direction = (RationalNumber) directory.getFieldValue(GPS_TAG_GPS_IMG_DIRECTION);
+    private Double parseDirection(TiffDirectory directory) {
+        RationalNumber direction = getFieldValue(directory, GPS_TAG_GPS_IMG_DIRECTION);
         return direction != null ? direction.doubleValue() : null;
     }
 
@@ -335,8 +346,8 @@ public class PhotoFormat extends SimpleFormat<Wgs84Route> {
         return measurementMode != null && measurementMode.equals(Integer.toString(GPS_TAG_GPS_MEASURE_MODE_VALUE_2_DIMENSIONAL_MEASUREMENT));
     }
 
-    private Double parseDOP(TiffDirectory directory) throws ImageReadException {
-        RationalNumber dop = (RationalNumber) directory.getFieldValue(GPS_TAG_GPS_DOP);
+    private Double parseDOP(TiffDirectory directory) {
+        RationalNumber dop = getFieldValue(directory, GPS_TAG_GPS_DOP);
         return dop != null ? dop.doubleValue() : null;
     }
 

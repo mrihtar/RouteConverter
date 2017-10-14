@@ -20,9 +20,12 @@
 
 package slash.navigation.geonames;
 
+import slash.common.helpers.APIKeyRegistry;
 import slash.navigation.common.BoundingBox;
 import slash.navigation.common.LongitudeAndLatitude;
+import slash.navigation.common.NavigationPosition;
 import slash.navigation.elevation.ElevationService;
+import slash.navigation.geocoding.GeocodingService;
 import slash.navigation.geonames.binding.Geonames;
 import slash.navigation.rest.Get;
 import slash.navigation.rest.exception.ServiceUnavailableException;
@@ -31,9 +34,11 @@ import javax.xml.bind.JAXBException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 
 import static slash.common.io.Transfer.parseInteger;
+import static slash.common.io.Transfer.trim;
 
 /**
  * Encapsulates REST access to the geonames.org service.
@@ -41,25 +46,30 @@ import static slash.common.io.Transfer.parseInteger;
  * @author Christian Pesch
  */
 
-public class GeoNamesService implements ElevationService {
+public class GeoNamesService implements ElevationService, GeocodingService {
     private static final Preferences preferences = Preferences.userNodeForPackage(GeoNamesService.class);
+    private static final Logger log = Logger.getLogger(GeoNamesService.class.getName());
     private static final String GEONAMES_URL_PREFERENCE = "geonamesUrl";
-    private static final String GEONAMES_USERNAME_PREFERENCE = "geonamesUserName";
+    private int overQueryLimitCount;
 
     public String getName() {
         return "GeoNames";
     }
 
-    private String getGeoNamesNamesUrl() {
+    public boolean isOverQueryLimit() {
+        return overQueryLimitCount > 0;
+    }
+
+    private String getGeoNamesApiUrl() {
         return preferences.get(GEONAMES_URL_PREFERENCE, "http://api.geonames.org/");
     }
 
-    private String getGeoNamesUserName() {
-        return preferences.get(GEONAMES_USERNAME_PREFERENCE, "routeconverter");
-    }
+    private String execute(String uri, String apiType) throws IOException {
+        String userName = trim(APIKeyRegistry.getInstance().getAPIKey("geonames", apiType));
+        if(userName == null)
+            return null;
 
-    private String execute(String uri) throws IOException {
-        String url = getGeoNamesNamesUrl() + uri + "&username=" + getGeoNamesUserName();
+        String url = getGeoNamesApiUrl() + uri + "&username=" + userName;
         Get get = new Get(url);
         String result = get.executeAsString();
         if (get.isSuccessful()) {
@@ -70,7 +80,7 @@ public class GeoNamesService implements ElevationService {
     }
 
     private Integer getElevationFor(String uri, double longitude, double latitude, Integer nullValue) throws IOException {
-        String result = execute(uri + "?lat=" + latitude + "&lng=" + longitude); // could be up to 20 points
+        String result = execute(uri + "?lat=" + latitude + "&lng=" + longitude, uri); // could be up to 20 points
         if (result != null) {
             try {
                 Integer elevation = parseInteger(result);
@@ -84,8 +94,11 @@ public class GeoNamesService implements ElevationService {
     }
 
     private void checkCurrentlyOverloaded(String url, String result) throws ServiceUnavailableException {
-        if (result.contains("limit") && (result.contains("overloaded") || result.contains("exceeded")))
-            throw new ServiceUnavailableException("geonames.org", url);
+        if (result.contains("limit") && (result.contains("overloaded") || result.contains("exceeded"))) {
+            overQueryLimitCount++;
+            log.warning("geonames API is over query limit, count: " + overQueryLimitCount + ", url: " + url);
+            throw new ServiceUnavailableException(getClass().getSimpleName(), url, result);
+        }
     }
 
     Integer getAsterGDEMElevationFor(double longitude, double latitude) throws IOException {
@@ -115,8 +128,12 @@ public class GeoNamesService implements ElevationService {
         return elevation != null ? elevation.doubleValue() : null;
     }
 
-    private Geonames getGeonamesFor(String uri) throws IOException {
-        String result = execute(uri);
+    public List<NavigationPosition> getPositionsFor(String address) throws IOException {
+        return null; // not supported
+    }
+
+    private Geonames getGeonamesFor(String uri, String apiType) throws IOException {
+        String result = execute(uri, apiType);
         if (result != null) {
             try {
                 return GeoNamesUtil.unmarshal(result);
@@ -128,7 +145,7 @@ public class GeoNamesService implements ElevationService {
     }
 
     private Geonames getGeonamesFor(String uri, double longitude, double latitude) throws IOException {
-        return getGeonamesFor(uri + "?lat=" + latitude + "&lng=" + longitude);
+        return getGeonamesFor(uri + "?lat=" + latitude + "&lng=" + longitude, uri);
     }
 
     private String getNearByFor(String uri, double longitude, double latitude) throws IOException {
@@ -152,60 +169,14 @@ public class GeoNamesService implements ElevationService {
         return getNearByFor("findNearbyPlaceName", longitude, latitude);
     }
 
-    public String getNearByFor(double longitude, double latitude) throws IOException {
-        String description = getNearByPlaceNameFor(longitude, latitude);
+    public String getAddressFor(NavigationPosition position) throws IOException {
+        String description = getNearByPlaceNameFor(position.getLongitude(), position.getLatitude());
         if (description == null)
-            description = getNearByToponymFor(longitude, latitude);
+            description = getNearByToponymFor(position.getLongitude(), position.getLatitude());
         return description;
     }
 
-    public PostalCode getNearByPostalCodeFor(double longitude, double latitude) throws IOException {
-        Geonames geonames = getGeonamesFor("findNearbyPostalCodes", longitude, latitude);
-        if (geonames == null || geonames.getCode() == null)
-            return null;
-        List<PostalCode> result = new ArrayList<>();
-        for (Geonames.Code code : geonames.getCode()) {
-            result.add(new PostalCode(code.getCountryCode(), code.getPostalcode(), code.getName()));
-        }
-        return result.size() > 0 ? result.get(0) : null;
-    }
-
-    public String getPlaceNameFor(String countryCode, String postalCode) throws IOException {
-        Geonames geonames = getGeonamesFor("postalCodeSearch?postalcode=" + postalCode + "&country=" + countryCode);
-        if (geonames == null || geonames.getCode() == null)
-            return null;
-        List<PostalCode> result = new ArrayList<>();
-        for (Geonames.Code code : geonames.getCode()) {
-            result.add(new PostalCode(code.getCountryCode(), code.getPostalcode(), code.getName()));
-        }
-        return result.size() > 0 ? result.get(0).placeName : null;
-    }
-
-    /**
-     * Return longitude and latitude for the given country and postal code.
-     *
-     * @param countryCode the country code to search a position for
-     * @param postalCode  the postal code to search a position for
-     * @return the longitude and latitude for the given country and postal code
-     * @throws IOException if an error occurs while accessing geonames.org
-     */
-    public double[] getPositionFor(String countryCode, String postalCode) throws IOException {
-        Geonames geonames = getGeonamesFor("postalCodeSearch?postalcode=" + postalCode + "&country=" + countryCode);
-        if (geonames == null || geonames.getCode() == null)
-            return null;
-        List<Double> result = new ArrayList<>();
-        for (Geonames.Code code : geonames.getCode()) {
-            result.add(code.getLng().doubleValue());
-            result.add(code.getLat().doubleValue());
-        }
-        return result.size() > 1 ? new double[]{result.get(0), result.get(1)} : null;
-    }
-
     public boolean isDownload() {
-        return false;
-    }
-
-    public boolean isSupportsPath() {
         return false;
     }
 

@@ -22,6 +22,13 @@ package slash.navigation.columbus;
 import slash.navigation.base.NavigationFormat;
 import slash.navigation.base.NavigationFormatRegistry;
 import slash.navigation.gpx.GpxFormat;
+import slash.navigation.kml.Igo8RouteFormat;
+import slash.navigation.kml.Kml20Format;
+import slash.navigation.kml.Kml21Format;
+import slash.navigation.kml.Kml22BetaFormat;
+import slash.navigation.kml.Kml22Format;
+import slash.navigation.kml.KmzFormat;
+import slash.navigation.nmea.NmeaFormat;
 
 /**
  * Managed the navigation formats for the RouteConverter Columbus Edition.
@@ -30,6 +37,14 @@ import slash.navigation.gpx.GpxFormat;
  */
 public class ColumbusNavigationFormatRegistry extends NavigationFormatRegistry {
     protected boolean includeReadFormat(NavigationFormat format) {
-        return format instanceof GpxFormat || format instanceof ColumbusGpsFormat || format instanceof ColumbusGpsBinaryFormat;
+        return format instanceof ColumbusGpsBinaryFormat ||
+                format instanceof ColumbusGpsFormat ||
+                format instanceof GpxFormat ||
+                format instanceof Kml20Format ||
+                format instanceof Kml21Format ||
+                format instanceof Kml22BetaFormat ||
+                format instanceof Kml22Format && !(format instanceof Igo8RouteFormat) ||
+                format instanceof KmzFormat ||
+                format instanceof NmeaFormat;
     }
 }

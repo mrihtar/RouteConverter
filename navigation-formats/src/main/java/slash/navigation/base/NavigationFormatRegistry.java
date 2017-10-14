@@ -45,10 +45,9 @@ import slash.navigation.babel.TourExchangeFormat;
 import slash.navigation.bcr.MTP0607Format;
 import slash.navigation.bcr.MTP0809Format;
 import slash.navigation.columbus.ColumbusGpsBinaryFormat;
-import slash.navigation.columbus.ColumbusGpsProfessionalFormat;
-import slash.navigation.columbus.ColumbusGpsStandardFormat;
+import slash.navigation.columbus.ColumbusGpsType1Format;
 import slash.navigation.columbus.ColumbusGpsType2Format;
-import slash.navigation.columbus.GarbleColumbusGpsProfessionalFormat;
+import slash.navigation.columbus.GarbleColumbusGpsType1Format;
 import slash.navigation.copilot.CoPilot6Format;
 import slash.navigation.copilot.CoPilot7Format;
 import slash.navigation.copilot.CoPilot8Format;
@@ -64,6 +63,7 @@ import slash.navigation.gpx.Gpx10Format;
 import slash.navigation.gpx.Gpx11Format;
 import slash.navigation.itn.TomTom5RouteFormat;
 import slash.navigation.itn.TomTom8RouteFormat;
+import slash.navigation.itn.TomTom95RouteFormat;
 import slash.navigation.klicktel.KlickTelRouteFormat;
 import slash.navigation.kml.GarbleKml21Format;
 import slash.navigation.kml.GarbleKml21LittleEndianFormat;
@@ -89,6 +89,7 @@ import slash.navigation.nmea.MagellanExploristFormat;
 import slash.navigation.nmea.MagellanRouteFormat;
 import slash.navigation.nmea.NmeaFormat;
 import slash.navigation.nmn.NavigatingPoiWarnerFormat;
+import slash.navigation.nmn.NavigonCruiserFormat;
 import slash.navigation.nmn.Nmn4Format;
 import slash.navigation.nmn.Nmn5Format;
 import slash.navigation.nmn.Nmn6FavoritesFormat;
@@ -149,6 +150,7 @@ public class NavigationFormatRegistry {
         addFormat(NmeaFormat.class);
         addFormat(MTP0809Format.class);
         addFormat(MTP0607Format.class);
+        addFormat(TomTom95RouteFormat.class);
         addFormat(TomTom8RouteFormat.class);
         addFormat(TomTom5RouteFormat.class);
         addFormat(Igo8RouteFormat.class);
@@ -177,8 +179,7 @@ public class NavigationFormatRegistry {
         addFormat(Route66Format.class);
         addFormat(KompassFormat.class);
         addFormat(GlopusFormat.class);
-        addFormat(ColumbusGpsProfessionalFormat.class);
-        addFormat(ColumbusGpsStandardFormat.class);
+        addFormat(ColumbusGpsType1Format.class);
         addFormat(ColumbusGpsType2Format.class);
         addFormat(QstarzQ1000Format.class);
         addFormat(Iblue747Format.class);
@@ -204,6 +205,7 @@ public class NavigationFormatRegistry {
         addFormat(WintecWbt201Tk2Format.class);
         addFormat(ColumbusGpsBinaryFormat.class);
         addFormat(NavilinkFormat.class);
+        addFormat(NavigonCruiserFormat.class);
         addFormat(GoRiderGpsFormat.class);
         addFormat(KienzleGpsFormat.class);
         addFormat(GroundTrackFormat.class);
@@ -244,7 +246,7 @@ public class NavigationFormatRegistry {
         addFormat(UrlFormat.class);
 
         // second try for broken files
-        addFormat(GarbleColumbusGpsProfessionalFormat.class);
+        addFormat(GarbleColumbusGpsType1Format.class);
         addFormat(GarbleNmeaFormat.class);
         addFormat(GarbleHaicomLoggerFormat.class);
         addFormat(GarbleGpx10Format.class);

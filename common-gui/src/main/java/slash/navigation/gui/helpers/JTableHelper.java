@@ -22,9 +22,13 @@ package slash.navigation.gui.helpers;
 
 import javax.swing.*;
 import javax.swing.event.TableModelEvent;
+import javax.swing.table.TableCellEditor;
 import java.awt.*;
+import java.util.logging.Logger;
 
 import static java.lang.Integer.MAX_VALUE;
+import static java.lang.Math.max;
+import static java.lang.String.format;
 import static javax.swing.SwingUtilities.invokeLater;
 
 /**
@@ -34,6 +38,18 @@ import static javax.swing.SwingUtilities.invokeLater;
  */
 
 public class JTableHelper {
+    private static final Logger log = Logger.getLogger(JTableHelper.class.getName());
+
+    private static final int MINIMUM_ROW_HEIGHT = 16;
+    private static final int ROW_HEIGHT_MAGIC_CONSTANT = 4;
+
+    public static int calculateRowHeight(Object objectWithTable, TableCellEditor cellEditor, Object cellValue) {
+        Component component = cellEditor.getTableCellEditorComponent(null, cellValue, true, 0, 0);
+        int rowHeight = max(component.getPreferredSize().height - ROW_HEIGHT_MAGIC_CONSTANT, MINIMUM_ROW_HEIGHT);
+        log.info(format("Using row height %d for table %s", rowHeight, objectWithTable));
+        return rowHeight;
+    }
+
     public static void scrollToPosition(JTable table, int insertRow) {
         Rectangle rectangle = table.getCellRect(insertRow, 1, true);
         table.scrollRectToVisible(rectangle);

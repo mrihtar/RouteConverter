@@ -27,6 +27,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
 import static slash.common.io.Transfer.formatXMLTime;
 import static slash.common.io.Transfer.parseXMLTime;
 import static slash.navigation.download.queue.QueueUtil.marshal;
@@ -40,7 +41,7 @@ import static slash.navigation.download.queue.QueueUtil.unmarshal;
 
 public class QueuePersister {
 
-    public Result load(File file) throws IOException {
+    public List<Download> load(File file) throws IOException {
         if (!file.exists())
             return null;
 
@@ -50,19 +51,7 @@ public class QueuePersister {
         } catch (JAXBException e) {
             throw new IOException("Cannot unmarshall " + file + ": " + e, e);
         }
-        return new Result(asDownloads(queueType));
-    }
-
-    public static class Result {
-        private final List<Download> downloads;
-
-        public Result(List<Download> downloads) {
-            this.downloads = downloads;
-        }
-
-        public List<Download> getDownloads() {
-            return downloads;
-        }
+        return asDownloads(queueType);
     }
 
     private List<Download> asDownloads(QueueType queueType) {
@@ -98,15 +87,18 @@ public class QueuePersister {
         try {
             marshal(queueType, new FileOutputStream(file));
         } catch (JAXBException e) {
-            e.printStackTrace();
-            throw new IOException("Cannot marshall " + file + ": " + e, e);
+            throw new IOException("Cannot marshall " + file + ": " + e + "\n" + printStackTrace(e), e);
         }
     }
 
     private QueueType asQueueType(List<Download> downloads) {
         QueueType queueType = new ObjectFactory().createQueueType();
-        for (Download download : downloads)
+        for (Download download : downloads) {
+            // make more robust against strange effects seen on chinese Macs
+            if(download == null)
+                continue;
             queueType.getDownload().add(asDownloadType(download));
+        }
         return queueType;
     }
 

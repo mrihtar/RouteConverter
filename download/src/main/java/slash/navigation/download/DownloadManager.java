@@ -38,6 +38,7 @@ import static java.lang.System.currentTimeMillis;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.SECONDS;
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
 import static slash.navigation.download.Action.*;
 import static slash.navigation.download.State.*;
 
@@ -49,7 +50,7 @@ import static slash.navigation.download.State.*;
 
 public class DownloadManager {
     private static final Logger log = Logger.getLogger(DownloadManager.class.getName());
-    static final int WAIT_TIMEOUT = 60 * 1000;
+    static final int WAIT_TIMEOUT = 600 * 1000;
     private static final int PARALLEL_DOWNLOAD_COUNT = 4;
 
     private final File queueFile;
@@ -86,15 +87,11 @@ public class DownloadManager {
     public void loadQueue() {
         try {
             log.info(format("Loading download queue from '%s'", queueFile));
-            QueuePersister.Result result = new QueuePersister().load(queueFile);
-            if (result == null)
+            List<Download> downloads = new QueuePersister().load(queueFile);
+            if (downloads == null)
                 return;
-
-            List<Download> downloads = result.getDownloads();
-            if (downloads != null)
-                model.setDownloads(downloads);
+            model.setDownloads(downloads);
         } catch (Exception e) {
-            e.printStackTrace();
             log.severe(format("Could not load download queue from '%s': %s", queueFile, e));
         }
 
@@ -144,8 +141,7 @@ public class DownloadManager {
         try {
             new QueuePersister().save(queueFile, model.getDownloads());
         } catch (Exception e) {
-            e.printStackTrace();
-            log.severe(format("Could not save %d download queue to '%s': %s", model.getRowCount(), queueFile, e));
+            log.severe(format("Could not save %d download queue to '%s': %s, %s", model.getRowCount(), queueFile, e, printStackTrace(e)));
         }
     }
 
@@ -275,7 +271,7 @@ public class DownloadManager {
 
     public void scanForOutdatedFilesInQueue() throws IOException {
         for(Download download : model.getDownloads()) {
-            if (COMPLETED.contains(download.getState())) {
+            if (COMPLETED.contains(download.getState()) && !Outdated.equals(download.getState())) {
 
                 Validator validator = new Validator(download);
                 if (!validator.isChecksumsValid()) {
@@ -283,7 +279,10 @@ public class DownloadManager {
 
                     download.setState(Outdated);
                     getModel().updateDownload(download);
-                }
+
+                } else
+                    // set expected to actual checksum to avoid endless "locally later than remote"
+                    validator.expectedChecksumIsCurrentChecksum();
             }
         }
     }
@@ -350,6 +349,7 @@ public class DownloadManager {
             if (!SUCCESSFUL.contains(download.getState()))
                 return;
         }
-        invokeAfterSuccessfulDownloadRunnable.run();
+        if (invokeAfterSuccessfulDownloadRunnable != null)
+            invokeAfterSuccessfulDownloadRunnable.run();
     }
 }

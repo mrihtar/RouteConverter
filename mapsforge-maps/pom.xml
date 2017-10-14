@@ -2,11 +2,11 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>mapsforge-maps</artifactId>
     <packaging>jar</packaging>
-    <name>Access to mapsforge maps and themes files</name>
+    <name>Read mapsforge maps and themes</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -52,6 +52,11 @@
         <dependency>
             <groupId>org.mapsforge</groupId>
             <artifactId>mapsforge-map-reader</artifactId>
+            <version>${mapsforge.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mapsforge</groupId>
+            <artifactId>mapsforge-themes</artifactId>
             <version>${mapsforge.version}</version>
         </dependency>
     </dependencies>

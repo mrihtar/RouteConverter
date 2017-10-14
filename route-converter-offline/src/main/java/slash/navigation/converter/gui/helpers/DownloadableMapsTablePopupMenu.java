@@ -23,7 +23,7 @@ import slash.navigation.maps.impl.RemoteMapsTableModel;
 
 import javax.swing.*;
 
-import static slash.navigation.converter.gui.models.LocalNames.DOWNLOADABLE_MAPS;
+import static slash.navigation.converter.gui.models.LocalActionConstants.DOWNLOADABLE_MAPS;
 import static slash.navigation.gui.helpers.JMenuHelper.createItem;
 
 /**

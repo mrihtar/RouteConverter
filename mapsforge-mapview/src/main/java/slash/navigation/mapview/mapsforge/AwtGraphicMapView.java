@@ -37,12 +37,14 @@ import org.mapsforge.map.model.Model;
 import org.mapsforge.map.scalebar.DefaultMapScaleBar;
 import org.mapsforge.map.scalebar.MapScaleBar;
 import org.mapsforge.map.util.MapPositionUtil;
+import org.mapsforge.map.util.MapViewProjection;
 import org.mapsforge.map.view.FpsCounter;
 import org.mapsforge.map.view.FrameBuffer;
 
 import java.awt.*;
 
 import static org.mapsforge.map.awt.graphics.AwtGraphicFactory.INSTANCE;
+import static org.mapsforge.map.awt.graphics.AwtGraphicFactory.clearResourceFileCache;
 import static org.mapsforge.map.awt.graphics.AwtGraphicFactory.clearResourceMemoryCache;
 
 /**
@@ -59,6 +61,7 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
     private final LayerManager layerManager;
     private final FpsCounter fpsCounter;
     private MapScaleBar mapScaleBar;
+    private final MapViewProjection mapViewProjection;
     private final Model model;
 
     public AwtGraphicMapView() {
@@ -77,10 +80,16 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
         MapViewController.create(this, model);
 
         this.mapScaleBar = new DefaultMapScaleBar(model.mapViewPosition, model.mapViewDimension, GRAPHIC_FACTORY, model.displayModel);
+
+        this.mapViewProjection = new MapViewProjection(this);
     }
 
     public void addLayer(Layer layer) {
         this.layerManager.getLayers().add(layer);
+    }
+
+    public void removeLayer(Layer layer) {
+        this.layerManager.getLayers().remove(layer);
     }
 
     public void destroy() {
@@ -97,7 +106,7 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
             layerManager.getLayers().remove(layer);
             layer.onDestroy();
             if (layer instanceof TileLayer) {
-                ((TileLayer<?>) layer).getTileCache().destroy();
+                ((TileLayer) layer).getTileCache().destroy();
             }
             if (layer instanceof TileRendererLayer) {
                 LabelStore labelStore = ((TileRendererLayer) layer).getLabelStore();
@@ -108,6 +117,7 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
         }
         destroy();
         clearResourceMemoryCache();
+        clearResourceFileCache();
     }
 
     public BoundingBox getBoundingBox() {
@@ -135,6 +145,10 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
         return mapScaleBar;
     }
 
+    public MapViewProjection getMapViewProjection() {
+        return mapViewProjection;
+    }
+
     public Model getModel() {
         return model;
     }
@@ -149,7 +163,7 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
     }
 
     public void setCenter(LatLong center) {
-        this.model.mapViewPosition.setCenter(center);
+        model.mapViewPosition.setCenter(center);
     }
 
     public void setMapScaleBar(MapScaleBar mapScaleBar) {
@@ -158,6 +172,14 @@ public class AwtGraphicMapView extends Container implements org.mapsforge.map.vi
     }
 
     public void setZoomLevel(byte zoomLevel) {
-        this.model.mapViewPosition.setZoomLevel(zoomLevel);
+        model.mapViewPosition.setZoomLevel(zoomLevel);
+    }
+
+    public void setZoomLevelMax(byte zoomLevelMax) {
+        model.mapViewPosition.setZoomLevelMax(zoomLevelMax);
+    }
+
+    public void setZoomLevelMin(byte zoomLevelMin) {
+        model.mapViewPosition.setZoomLevelMin(zoomLevelMin);
     }
 }

@@ -36,8 +36,14 @@ import slash.navigation.tour.TourPosition;
 import java.util.Calendar;
 
 import static java.lang.Double.isNaN;
-import static java.lang.Math.*;
-import static java.util.Calendar.*;
+import static java.lang.Math.abs;
+import static java.lang.Math.asin;
+import static java.lang.Math.sin;
+import static java.lang.Math.toRadians;
+import static java.util.Calendar.DAY_OF_MONTH;
+import static java.util.Calendar.MONTH;
+import static java.util.Calendar.YEAR;
+import static slash.common.io.Transfer.isEmpty;
 import static slash.common.type.CompactCalendar.fromCalendar;
 import static slash.navigation.common.Bearing.EARTH_RADIUS;
 import static slash.navigation.common.Bearing.calculateBearing;
@@ -125,7 +131,7 @@ public abstract class BaseNavigationPosition implements NavigationPosition {
         if (hasTime() && other.hasTime()) {
             double interval = abs(getTime().getTimeInMillis() - other.getTime().getTimeInMillis()) / 1000.0;
             Double distance = calculateDistance(other);
-            if (distance != null && interval > 0.0)
+            if (!isEmpty(distance) && interval > 0.0)
                 return distance / interval * 3.6;
         }
         return null;
@@ -142,7 +148,7 @@ public abstract class BaseNavigationPosition implements NavigationPosition {
     }
 
     @SuppressWarnings("UnusedDeclaration")
-    public Wgs84Position asColumbusGpsType2Position() {
+    public Wgs84Position asColumbusGpsTypePosition() {
         return asWgs84Position();
     }
 
@@ -307,6 +313,11 @@ public abstract class BaseNavigationPosition implements NavigationPosition {
 
     @SuppressWarnings("UnusedDeclaration")
     public Wgs84Position asNavigatingPoiWarnerPosition() {
+        return asWgs84Position();
+    }
+
+    @SuppressWarnings("UnusedDeclaration")
+    public Wgs84Position asNavigonCruiserPosition() {
         return asWgs84Position();
     }
 

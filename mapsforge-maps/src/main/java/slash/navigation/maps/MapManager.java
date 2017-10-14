@@ -19,7 +19,6 @@
 */
 package slash.navigation.maps;
 
-import org.mapsforge.map.layer.download.tilesource.OpenCycleMap;
 import org.mapsforge.map.layer.download.tilesource.OpenStreetMapMapnik;
 import org.mapsforge.map.rendertheme.ExternalRenderTheme;
 import slash.navigation.datasources.DataSource;
@@ -30,6 +29,7 @@ import slash.navigation.maps.helpers.ThemeForMapMediator;
 import slash.navigation.maps.impl.*;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -122,18 +122,40 @@ public class MapManager {
         return appliedThemeModel;
     }
 
+    public String getMapsPath() {
+        return preferences.get(MAP_DIRECTORY_PREFERENCE, "");
+    }
+
+    public void setMapsPath(String path) {
+        preferences.put(MAP_DIRECTORY_PREFERENCE, path);
+    }
+
+    public String getThemePath() {
+        return preferences.get(THEME_DIRECTORY_PREFERENCE, "");
+    }
+
+    public void setThemePath(String path) {
+        preferences.put(THEME_DIRECTORY_PREFERENCE, path);
+    }
+
+    private File getDirectory(String preferencesPath, String directoryName) {
+        java.io.File f = new java.io.File(preferencesPath);
+        if (f.exists())
+            return f;
+        return ensureDirectory(getApplicationDirectory(directoryName).getAbsolutePath());
+    }
+
     public File getMapsDirectory() {
-        return new File(preferences.get(MAP_DIRECTORY_PREFERENCE, getApplicationDirectory("maps").getAbsolutePath()));
+        return getDirectory(getMapsPath(), "maps");
     }
 
     public File getThemesDirectory() {
-        return new File(preferences.get(THEME_DIRECTORY_PREFERENCE, getApplicationDirectory("themes").getAbsolutePath()));
+        return getDirectory(getMapsPath(), "themes");
     }
 
     private void initializeOnlineMaps() {
         availableMapsModel.clear();
         availableMapsModel.addOrUpdateMap(new OnlineMap("OpenStreetMap", OPENSTREETMAP_URL, OpenStreetMapMapnik.INSTANCE));
-        availableMapsModel.addOrUpdateMap(new OnlineMap("OpenCycleMap", "http://www.opencyclemap.org/", OpenCycleMap.INSTANCE));
     }
 
     private void initializeBuiltinThemes() {
@@ -141,18 +163,29 @@ public class MapManager {
         availableThemesModel.addOrUpdateTheme(new VectorTheme("OpenStreetMap Osmarender", OSMARENDER_URL, OSMARENDER));
     }
 
+    private void checkFile(File file) throws FileNotFoundException {
+        if (!file.exists())
+            throw new FileNotFoundException("file does not exist: " + file.getAbsolutePath());
+        else if (!file.isFile())
+            throw new FileNotFoundException("not a file: " + file.getAbsolutePath());
+        else if (!file.canRead())
+            throw new FileNotFoundException("cannot read file: " + file.getAbsolutePath());
+    }
+
     public synchronized void scanMaps() throws IOException {
         initializeOnlineMaps();
 
         long start = currentTimeMillis();
 
-        File mapsDirectory = ensureDirectory(getMapsDirectory());
+        File mapsDirectory = getMapsDirectory();
         List<File> mapFiles = collectFiles(mapsDirectory, ".map");
         File[] mapFilesArray = mapFiles.toArray(new File[mapFiles.size()]);
         for (File file : mapFilesArray) {
+            // avoid directory with world.map
             if(file.getParent().endsWith("routeconverter"))
                 continue;
 
+            checkFile(file);
             availableMapsModel.addOrUpdateMap(new VectorMap(removePrefix(mapsDirectory, file), file.toURI().toString(), extractBoundingBox(file), file));
         }
 
@@ -166,11 +199,13 @@ public class MapManager {
 
         long start = currentTimeMillis();
 
-        File themesDirectory = ensureDirectory(getThemesDirectory());
+        File themesDirectory = getThemesDirectory();
         List<File> themeFiles = collectFiles(themesDirectory, ".xml");
         File[] themeFilesArray = themeFiles.toArray(new File[themeFiles.size()]);
-        for (File file : themeFilesArray)
+        for (File file : themeFilesArray) {
+            checkFile(file);
             availableThemesModel.addOrUpdateTheme(new VectorTheme(removePrefix(themesDirectory, file), file.toURI().toString(), new ExternalRenderTheme(file)));
+        }
 
         long end = currentTimeMillis();
         log.info(format("Collected %d theme files %s from %s in %d milliseconds",

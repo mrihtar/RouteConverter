@@ -20,13 +20,22 @@
 package slash.navigation.columbus;
 
 import org.junit.Test;
+
 import slash.navigation.base.NavigationFormat;
 import slash.navigation.base.NavigationFormatRegistry;
 import slash.navigation.gpx.Gpx11Format;
+import slash.navigation.kml.Igo8RouteFormat;
+import slash.navigation.kml.Kml22Format;
+import slash.navigation.kml.Kmz22Format;
+import slash.navigation.nmea.MagellanExploristFormat;
+import slash.navigation.nmea.MagellanRouteFormat;
+import slash.navigation.nmea.NmeaFormat;
 
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ColumbusNavigationFormatRegistryTest {
     private NavigationFormatRegistry registry = new ColumbusNavigationFormatRegistry();
@@ -34,7 +43,23 @@ public class ColumbusNavigationFormatRegistryTest {
     @Test
     public void testNotExistingExtension() {
         List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".ov2");
-        assertEquals(Gpx11Format.class, formats.get(0).getClass());
+        assertEquals(NmeaFormat.class, formats.get(0).getClass());
+        assertEquals(Kml22Format.class, formats.get(1).getClass());
+        assertEquals(Kmz22Format.class, formats.get(2).getClass());
+    }
+
+    @Test
+    public void testGetReadFormatsSortedByExtensionCsv() {
+        List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".csv");
+        assertEquals(ColumbusGpsType1Format.class, formats.get(0).getClass());
+        assertEquals(ColumbusGpsType2Format.class, formats.get(1).getClass());
+        assertEquals(GarbleColumbusGpsType1Format.class, formats.get(2).getClass());
+    }
+
+    @Test
+    public void testGetReadFormatsSortedByExtensionGps() {
+        List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".gps");
+        assertEquals(ColumbusGpsBinaryFormat.class, formats.get(0).getClass());
     }
 
     @Test
@@ -44,17 +69,25 @@ public class ColumbusNavigationFormatRegistryTest {
     }
 
     @Test
-    public void testGetReadFormatsSortedByExtensionCsv() {
-        List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".csv");
-        assertEquals(ColumbusGpsProfessionalFormat.class, formats.get(0).getClass());
-        assertEquals(ColumbusGpsStandardFormat.class, formats.get(1).getClass());
-        assertEquals(ColumbusGpsType2Format.class, formats.get(2).getClass());
-        assertEquals(GarbleColumbusGpsProfessionalFormat.class, formats.get(3).getClass());
+    public void testGetReadFormatsSortedByExtensionKml() {
+        List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".kml");
+        assertEquals(Kml22Format.class, formats.get(0).getClass());
+    }
+
+    private boolean containsFormat(List<NavigationFormat> formats, Class clazz) {
+        for(NavigationFormat format : formats) {
+            if(clazz.isInstance(format))
+                return true;
+        }
+        return false;
     }
 
     @Test
-    public void testGetReadFormatsSortedByExtensionGps() {
-        List<NavigationFormat> formats = registry.getReadFormatsPreferredByExtension(".gps");
-        assertEquals(ColumbusGpsBinaryFormat.class, formats.get(0).getClass());
+    public void testNoCompetitorFormats() {
+        List<NavigationFormat> formats = registry.getReadFormats();
+        assertTrue(containsFormat(formats, Kml22Format.class));
+        assertFalse(containsFormat(formats, Igo8RouteFormat.class));
+        assertFalse(containsFormat(formats, MagellanExploristFormat.class));
+        assertFalse(containsFormat(formats, MagellanRouteFormat.class));
     }
 }

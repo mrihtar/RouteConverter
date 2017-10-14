@@ -2,11 +2,11 @@
     <modelVersion>4.0.0</modelVersion>
     <artifactId>jnlp</artifactId>
     <packaging>jar</packaging>
-    <name>Access to Java Network Launching Protocol (JNLP)</name>
+    <name>Single instance clients for Webstart</name>
     <parent>
         <groupId>slash.navigation</groupId>
         <artifactId>RouteConverter</artifactId>
-        <version>2.18-SNAPSHOT</version>
+        <version>2.22-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 

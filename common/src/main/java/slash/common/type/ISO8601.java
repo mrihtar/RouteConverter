@@ -36,15 +36,15 @@ import static slash.common.type.CompactCalendar.UTC;
  * The <code>ISO8601</code> utility class provides helper methods
  * to deal with date/time formatting using a specific ISO8601-compliant
  * format (see <a href="http://www.w3.org/TR/NOTE-datetime">ISO 8601</a>).
- * <p/>
+ *
  * The currently supported format is:
  * <pre>
- *   &plusmn;YYYY-MM-DDThh:mm:ss[.SSS]TZD
+ *   +-YYY-MM-DDThh:mm:ss[.SSS]TZD
  * </pre>
  * where:
  * <pre>
- *   &plusmn;YYYY = four-digit year with optional sign where values <= 0 are
- *           denoting years BCE and values > 0 are denoting years CE,
+ *  +-YYYY = four-digit year with optional sign where values ;lteq; 0 are
+ *           denoting years BCE and values &gt; 0 are denoting years CE,
  *           e.g. -0001 denotes the year 2 BCE, 0000 denotes the year 1 BCE,
  *           0001 denotes the year 1 CE, and so on...
  *   MM    = two-digit month (01=January, etc.)
@@ -91,7 +91,7 @@ public final class ISO8601 {
             start = 0;
         }
 
-        /**
+        /*
          * the expected format of the remainder of the string is:
          * YYYY-MM-DDThh:mm:ss
          *
@@ -174,9 +174,7 @@ public final class ISO8601 {
                 timeZone = getTimeZone("GMT" + delimiter + tzString);
             } else
                 return null;
-        } catch (IndexOutOfBoundsException e) {
-            return null;
-        } catch (NumberFormatException e) {
+        } catch (IndexOutOfBoundsException | NumberFormatException e) {
             return null;
         }
 
@@ -206,7 +204,7 @@ public final class ISO8601 {
         calendar.set(MILLISECOND, milliseconds);
 
         try {
-            /**
+            /*
              * the following call will trigger an IllegalArgumentException
              * if any of the set values are illegal or out of range
              */
@@ -248,14 +246,14 @@ public final class ISO8601 {
         // determine era and adjust year if necessary
         int year = calendar.get(YEAR);
         if (calendar.isSet(ERA) && calendar.get(ERA) == BC) {
-            /**
+            /*
              * calculate year using astronomical system:
              * year n BCE => astronomical year -n + 1
              */
             year = 0 - year + 1;
         }
 
-        /**
+        /*
          * the format of the date/time string is:
          * YYYY-MM-DDThh:mm:ss
          *

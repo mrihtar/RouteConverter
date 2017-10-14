@@ -63,7 +63,7 @@ public class NavigationFormatParserIT {
                                   int characteristicsCount, int[] positionCount) throws IOException {
         ParserResult result = read(testFileName);
         List<BaseRoute> routes = getRouteCharacteristics(result.getAllRoutes(), characteristics);
-        if (characteristicsCount == 0) {
+        if (routes == null || characteristicsCount == 0) {
             assertNull(routes);
         } else {
             assertEquals(characteristicsCount, routes.size());
@@ -164,7 +164,7 @@ public class NavigationFormatParserIT {
 
         readWaypoints(TEST_PATH + "from11trk.gpx", 3);
         readRoute(TEST_PATH + "from11trk.gpx", 0);
-        readTrack(TEST_PATH + "from11trk.gpx", 4, 1, 2, 3, 4);
+        readTrack(TEST_PATH + "from11trk.gpx", 4, 5, 2, 3, 4);
 
         read(TEST_PATH + "large11.gpx");
     }

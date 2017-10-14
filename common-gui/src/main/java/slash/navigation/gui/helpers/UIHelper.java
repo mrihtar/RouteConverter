@@ -20,9 +20,6 @@
 
 package slash.navigation.gui.helpers;
 
-import slash.navigation.gui.Application;
-import slash.navigation.gui.SingleFrameApplication;
-
 import javax.swing.*;
 import java.awt.*;
 import java.util.MissingResourceException;
@@ -35,6 +32,7 @@ import static java.awt.Cursor.WAIT_CURSOR;
 import static java.awt.dnd.DragSource.DefaultMoveDrop;
 import static java.util.logging.Logger.getLogger;
 import static java.util.prefs.Preferences.userNodeForPackage;
+import static slash.common.system.Platform.isWindows;
 
 /**
  * Helpers used throughout the UI
@@ -89,6 +87,12 @@ public class UIHelper {
     }
 
     public static JFileChooser createJFileChooser() {
+        if(isWindows()) {
+            // workaround
+            // https://bugs.openjdk.java.net/browse/JDK-8179014
+            UIManager.put("FileChooser.useSystemExtensionHiding", false);
+        }
+
         JFileChooser chooser;
         try {
             try {
@@ -116,7 +120,7 @@ public class UIHelper {
         }
     }
 
-    private static FontMetrics fontMetrics = null;
+    private static FontMetrics fontMetrics;
 
     public static int getMaxWidth(String string, int extraWidth) {
         if (fontMetrics == null) {
@@ -125,12 +129,5 @@ public class UIHelper {
         }
         int width = fontMetrics.stringWidth(string);
         return width + extraWidth;
-    }
-
-    public static JFrame getFrame() {
-        Application application = Application.getInstance();
-        if (!(application instanceof SingleFrameApplication))
-            return null;
-        return ((SingleFrameApplication) application).getFrame();
     }
 }

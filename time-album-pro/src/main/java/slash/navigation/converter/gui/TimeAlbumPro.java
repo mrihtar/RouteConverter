@@ -22,12 +22,7 @@ package slash.navigation.converter.gui;
 import slash.navigation.base.NavigationFormatRegistry;
 import slash.navigation.columbus.ColumbusNavigationFormatRegistry;
 import slash.navigation.converter.gui.actions.ShowAboutTimeAlbumProAction;
-import slash.navigation.converter.gui.helpers.MapViewImplementation;
 import slash.navigation.gui.actions.SingletonDialogAction;
-
-import static javax.swing.JOptionPane.ERROR_MESSAGE;
-import static javax.swing.JOptionPane.showMessageDialog;
-import static slash.navigation.converter.gui.helpers.MapViewImplementation.EclipseSWT;
 
 /**
  * A graphical user interface for Columbus devices.
@@ -42,7 +37,11 @@ public class TimeAlbumPro extends RouteConverter {
         launch(TimeAlbumPro.class, new String[]{RouteConverter.class.getPackage().getName() + ".Untranslated", RouteConverter.class.getName()}, args);
     }
 
-    public String getEditionName() {
+    protected String getProduct() {
+        return "TimeAlbumPro";
+    }
+
+    public String getEdition() {
         return "TimeAlbum Pro";
     }
 
@@ -52,10 +51,6 @@ public class TimeAlbumPro extends RouteConverter {
 
     public NavigationFormatRegistry getNavigationFormatRegistry() {
         return navigationFormatRegistry;
-    }
-
-    protected MapViewImplementation getPreferredMapView() {
-        return EclipseSWT;
     }
 
     protected boolean isPointsOfInterestEnabled() {
@@ -68,19 +63,5 @@ public class TimeAlbumPro extends RouteConverter {
 
     protected SingletonDialogAction createAboutAction() {
         return new ShowAboutTimeAlbumProAction();
-    }
-
-    static {
-        Thread thread = new Thread(new Runnable() {
-            public void run() {
-                try {
-                    Thread.sleep(10 * 60 * 1000);
-                } catch (InterruptedException e) {
-                }
-                showMessageDialog(null, "Thank you for testing.", "TimeAlbum Pro", ERROR_MESSAGE);
-                System.exit(5);
-            }
-        });
-        thread.start();
     }
 }

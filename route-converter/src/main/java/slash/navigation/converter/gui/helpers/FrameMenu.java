@@ -60,6 +60,7 @@ public class FrameMenu {
         editMenu.add(createItem("delete"));
         editMenu.addSeparator();
         editMenu.add(createItem("select-all"));
+        editMenu.add(createItem("clear-selection"));
 
         JMenu positionMenu = createMenu("position");
         positionMenu.add(createItem("new-position"));
@@ -74,8 +75,7 @@ public class FrameMenu {
         JMenu completeMenu = createMenu("complete");
         completeMenu.add(createItem("add-coordinates"));
         completeMenu.add(createItem("add-elevation"));
-        completeMenu.add(createItem("add-postal-address"));
-        completeMenu.add(createItem("add-populated-place"));
+        completeMenu.add(createItem("add-address"));
         completeMenu.add(createItem("add-speed"));
         completeMenu.add(createItem("add-time"));
         completeMenu.add(createItem("add-number"));

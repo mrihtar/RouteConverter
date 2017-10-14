@@ -54,27 +54,42 @@ public class AutomaticElevationService implements ElevationService {
         return true;
     }
 
-    public boolean isSupportsPath() {
+    public boolean isOverQueryLimit() {
         return false;
     }
 
     public String getPath() {
-        throw new UnsupportedOperationException();
+        // do not throw UnsupportedOperationException since #isDownload is true to omit (online) suffix in rendering
+        return "";
     }
 
     public void setPath(String path) {
-        throw new UnsupportedOperationException();
+        // do not throw UnsupportedOperationException since #isDownload is true to omit (online) suffix in rendering
     }
 
     public Double getElevationFor(double longitude, double latitude) throws IOException {
+        IOException lastException = null;
+
         for (ElevationService service : sortByBestEffort(elevationServiceFacade.getElevationServices())) {
-            Double elevation = service.getElevationFor(longitude, latitude);
-            if (elevation != null) {
-                log.fine("Used " + service.getName() + " to retrieve elevation for " + longitude + "/" + latitude);
-                return elevation;
+            try {
+                if(service.isOverQueryLimit())
+                    continue;
+
+                Double elevation = service.getElevationFor(longitude, latitude);
+                if (elevation != null) {
+                    log.fine("Used " + service.getName() + " to retrieve elevation " + elevation + " for " + longitude + "/" + latitude);
+                    return elevation;
+                }
+
+            } catch (IOException e) {
+                lastException = e;
             }
         }
-        return null;
+
+        if(lastException != null)
+            throw lastException;
+        else
+            return null;
     }
 
     private ElevationService[] sortByBestEffort(List<ElevationService> elevationServices) {

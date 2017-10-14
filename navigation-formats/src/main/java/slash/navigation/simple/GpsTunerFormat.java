@@ -36,8 +36,8 @@ import static slash.navigation.common.NavigationConversion.*;
 
 /**
  * Reads and writes GPS Tuner (.trk) files.
- * <p/>
- * Header: Latitude(Degree);Longitude(Degree);Altitude(m);Speed(kmph);Date(Unix TimeStamp);Segment;Heading(Degree)<br/>
+ *
+ * Header: Latitude(Degree);Longitude(Degree);Altitude(m);Speed(kmph);Date(Unix TimeStamp);Segment;Heading(Degree)
  * Format: 50.3965966666667;7.53247333333333;74.4000015258789;77.56176;1172932595;1;279
  *
  * @author Christian Pesch
@@ -87,7 +87,7 @@ public class GpsTunerFormat extends SimpleLineBasedFormat<SimpleRoute> {
 
     private CompactCalendar parseTime(String time) {
         Long milliseconds = parseLong(time);
-        if (milliseconds == null || milliseconds == 0)
+        if (isEmpty(milliseconds))
             return null;
         return fromMillis(milliseconds * 1000);
     }

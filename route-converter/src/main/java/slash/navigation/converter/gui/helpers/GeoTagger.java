@@ -20,12 +20,7 @@
 package slash.navigation.converter.gui.helpers;
 
 import slash.common.type.CompactCalendar;
-import slash.navigation.base.BaseNavigationPosition;
-import slash.navigation.base.NavigationFormatParser;
-import slash.navigation.base.ParserResult;
-import slash.navigation.base.Wgs84Position;
-import slash.navigation.base.Wgs84Route;
-import slash.navigation.photo.PhotoNavigationFormatRegistry;
+import slash.navigation.base.*;
 import slash.navigation.common.NavigationPosition;
 import slash.navigation.converter.gui.RouteConverter;
 import slash.navigation.converter.gui.models.PositionsModel;
@@ -34,6 +29,7 @@ import slash.navigation.gui.events.ContinousRange;
 import slash.navigation.gui.events.RangeOperation;
 import slash.navigation.gui.notifications.NotificationManager;
 import slash.navigation.photo.PhotoFormat;
+import slash.navigation.photo.PhotoNavigationFormatRegistry;
 import slash.navigation.photo.PhotoPosition;
 
 import javax.swing.*;
@@ -44,7 +40,6 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
@@ -53,12 +48,13 @@ import static java.lang.Math.min;
 import static java.lang.String.format;
 import static java.lang.System.currentTimeMillis;
 import static java.util.Collections.singletonList;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static javax.swing.JOptionPane.ERROR_MESSAGE;
 import static javax.swing.JOptionPane.showMessageDialog;
 import static javax.swing.SwingUtilities.invokeLater;
 import static javax.swing.event.TableModelEvent.ALL_COLUMNS;
 import static slash.common.helpers.ExceptionHelper.getLocalizedMessage;
+import static slash.common.helpers.ExceptionHelper.printStackTrace;
+import static slash.common.helpers.ThreadHelper.createSingleThreadExecutor;
 import static slash.common.io.Directories.ensureDirectory;
 import static slash.common.io.Files.collectFiles;
 import static slash.common.type.CompactCalendar.fromMillis;
@@ -66,9 +62,7 @@ import static slash.navigation.base.WaypointType.Photo;
 import static slash.navigation.converter.gui.helpers.TagStrategy.Create_Tagged_Photo_In_Subdirectory;
 import static slash.navigation.gui.events.Range.asRange;
 import static slash.navigation.gui.helpers.JTableHelper.scrollToPosition;
-import static slash.navigation.photo.TagState.NotTaggable;
-import static slash.navigation.photo.TagState.Taggable;
-import static slash.navigation.photo.TagState.Tagged;
+import static slash.navigation.photo.TagState.*;
 
 /**
  * Helps to tag photos with GPS data.
@@ -87,7 +81,7 @@ public class GeoTagger {
     private final JTable photosView;
     private final PositionsModel photosModel;
 
-    private final ExecutorService executor = newSingleThreadExecutor();
+    private final ExecutorService executor = createSingleThreadExecutor("GeoTagger");
     private static final Object notificationMutex = new Object();
     private boolean running = true;
 
@@ -119,7 +113,7 @@ public class GeoTagger {
     }
 
     private static class CancelAction extends AbstractAction {
-        private boolean canceled = false;
+        private boolean canceled;
 
         public boolean isCanceled() {
             return canceled;
@@ -161,7 +155,7 @@ public class GeoTagger {
                                     break;
                             }
                         } catch (Exception e) {
-                            log.warning(format("Error while running operation AddPhotos on file %s: %s", file, e));
+                            log.warning(format("Error while running operation AddPhotos on file %s: %s, %s", file, e, printStackTrace(e)));
                             lastException[0] = e;
                         }
                         getNotificationManager().showNotification(MessageFormat.format(
@@ -198,12 +192,14 @@ public class GeoTagger {
         PositionsModel originalPositionsModel = RouteConverter.getInstance().getConvertPanel().getPositionsModel();
         int index = getClosestPositionByCoordinates(position);
         if (index != -1) {
+            log.info("Tagging with closest position " + index + " by coordinates: " + position);
             position.setTagState(Tagged);
             position.setClosestPositionForTagging(originalPositionsModel.getPosition(index));
 
         } else {
             index = getClosestPositionByTime(position);
             if (index != -1) {
+                log.info("Tagging with closest position " + index + " by time: " + position);
                 position.setTagState(Taggable);
                 position.setClosestPositionForTagging(originalPositionsModel.getPosition(index));
             }
@@ -223,8 +219,8 @@ public class GeoTagger {
         RouteConverter r = RouteConverter.getInstance();
         PositionsModel originalPositionsModel = r.getConvertPanel().getPositionsModel();
         CompactCalendar time = position.getTime();
-        if (!time.getTimeZoneId().equals(r.getPhotoTimeZone()))
-            time = time.asUTCTimeInTimeZone(TimeZone.getTimeZone(r.getPhotoTimeZone()));
+        if (!time.getTimeZoneId().equals(r.getPhotoTimeZone().getTimeZoneId()))
+            time = time.asUTCTimeInTimeZone(r.getPhotoTimeZone().getTimeZone());
         long threshold = preferences.getLong(CLOSEST_POSITION_BY_TIME_THRESHOLD_PREFERENCE, 5 * 1000);
         return originalPositionsModel.getClosestPosition(time, threshold);
     }
@@ -276,7 +272,7 @@ public class GeoTagger {
                             try {
                                 operation.run(index, position);
                             } catch (Exception e) {
-                                log.warning(format("Error while running operation %s on position %d: %s", operation, index, e));
+                                log.warning(format("Error while running operation %s on position %d: %s, %s", operation, index, e, printStackTrace(e)));
                                 lastException[0] = e;
                             }
                             String progressMessage = RouteConverter.getBundle().getString(operation.getMessagePrefix() + "progress");
@@ -366,7 +362,7 @@ public class GeoTagger {
         }
     }
 
-    private File createSubDirectory(File source, String name) throws IOException {
+    private File createSubDirectory(File source, String name) {
         File subDirectory = new File(source.getParentFile(), name);
         return ensureDirectory(subDirectory);
     }
