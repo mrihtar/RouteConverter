@@ -85,6 +85,9 @@
                                         <exclude>META-INF/jb/</exclude>
                                         <exclude>META-INF/maven/</exclude>
                                         <exclude>META-INF/services/</exclude>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
                                         <exclude>mozilla/*</exclude>
                                         <exclude>*.html</exclude>
                                         <exclude>external.xpt</exclude>
