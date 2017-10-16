@@ -322,14 +322,14 @@ public class NavigationConversion {
         return formatDoubleAsString(elevation, maximumFractionDigits);
     }
 
-    public static String formatAccuracyAsString(Double elevation) {
+    public static String formatAccuracyAsString(Double accuracy) {
         int maximumFractionDigits = preferences.getInt("accuracyAsStringMaximumFractionDigits", 6);
-        return formatDoubleAsString(elevation, maximumFractionDigits);
+        return formatDoubleAsString(accuracy, maximumFractionDigits);
     }
 
-    public static String formatHeadingAsString(Double elevation) {
+    public static String formatHeadingAsString(Double heading) {
         int maximumFractionDigits = preferences.getInt("headingAsStringMaximumFractionDigits", 1);
-        return formatDoubleAsString(elevation, maximumFractionDigits);
+        return formatDoubleAsString(heading, maximumFractionDigits);
     }
 
     public static String formatSpeedAsString(Double speed) {
@@ -348,8 +348,13 @@ public class NavigationConversion {
     }
 
     public static BigDecimal formatElevation(Double elevation) {
-        int maximumFractionDigits = preferences.getInt("elevationMaximumFractionDigits", 1);
+        int maximumFractionDigits = preferences.getInt("elevationMaximumFractionDigits", 2);
         return formatBigDecimal(elevation, maximumFractionDigits);
+    }
+
+    public static BigDecimal formatAccuracy(Double accuracy) {
+        int maximumFractionDigits = preferences.getInt("accuracyMaximumFractionDigits", 6);
+        return formatBigDecimal(accuracy, maximumFractionDigits);
     }
 
     public static BigDecimal formatHeading(Double heading) {
@@ -360,6 +365,11 @@ public class NavigationConversion {
     public static BigDecimal formatSpeed(Double speed) {
         int maximumFractionDigits = preferences.getInt("speedMaximumFractionDigits", 2);
         return formatBigDecimal(speed, maximumFractionDigits);
+    }
+
+    public static BigDecimal formatTemperature(Double temperature) {
+        int maximumFractionDigits = preferences.getInt("temperatureMaximumFractionDigits", 1);
+        return formatBigDecimal(temperature, maximumFractionDigits);
     }
 
     public static double formatSpeedAsDouble(Double speed) {
